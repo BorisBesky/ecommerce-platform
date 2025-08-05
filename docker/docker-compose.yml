@@ -74,8 +74,9 @@ services:
   ray-head:
     # Corrected the image path from 'ray-project/ray-ml' to 'rayproject/ray-ml'
     image: rayproject/ray-ml:latest-cpu
+    shm_size: '2gb'
     ports:
       - "8265:8265" # Ray Dashboard
       - "10001:10001" # Ray Client
       - "6379:6379" # Ray head port
-    command: ray start --head --port=6379 --dashboard-host=0.0.0.0 --disable-usage-stats
+    command: bash -c "ray start --head --port=6379 --dashboard-host=0.0.0.0 --disable-usage-stats && tail -f /dev/null"
