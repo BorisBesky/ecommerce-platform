@@ -4,14 +4,14 @@ from pyspark.sql.functions import col
 # Define configuration settings
 # These settings connect Spark to our Docker services: Nessie for the catalog and MinIO for storage.
 CATALOG_NAME = "nessie"
-NESSIE_URI = "http://nessie:19120/api/v1"
+NESSIE_URI = "http://localhost:19120/api/v1"  # Use localhost since running outside Docker
 WAREHOUSE_PATH = "s3a://warehouse" # 'warehouse' is the bucket name in MinIO
-MINIO_ENDPOINT = "http://minio:9000"
+MINIO_ENDPOINT = "http://localhost:9000"  # Use localhost since running outside Docker
 
 # Input data paths within the container
 # We will mount the local ./data directory to /data inside the Spark container.
-USERS_DATA_PATH = "../data/users.csv"
-PRODUCTS_DATA_PATH = "../data/products.csv"
+USERS_DATA_PATH = "/Volumes/BigData/Users/borisbesky/Repo/ecommerce-platform/data/users.csv"
+PRODUCTS_DATA_PATH = "/Volumes/BigData/Users/borisbesky/Repo/ecommerce-platform/data/products.csv"
 
 def main():
     """
@@ -30,6 +30,12 @@ def main():
         
         builder = (
             SparkSession.builder.appName("IcebergBatchETL")
+            # Java 17+ compatibility fixes
+            .config("spark.driver.extraJavaOptions", "-Djava.security.manager=allow")
+            .config("spark.executor.extraJavaOptions", "-Djava.security.manager=allow")
+            # Iceberg and Nessie JAR packages - this will automatically download the dependencies
+            .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.3,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.77.1,org.apache.hadoop:hadoop-aws:3.3.4")
+            # Iceberg and Nessie catalog configuration
             .config(f"spark.sql.catalog.{CATALOG_NAME}", "org.apache.iceberg.spark.SparkCatalog")
             .config(f"spark.sql.catalog.{CATALOG_NAME}.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
             .config(f"spark.sql.catalog.{CATALOG_NAME}.uri", NESSIE_URI)
@@ -37,6 +43,7 @@ def main():
             .config(f"spark.sql.catalog.{CATALOG_NAME}.authentication.type", "NONE")
             .config(f"spark.sql.catalog.{CATALOG_NAME}.warehouse", WAREHOUSE_PATH)
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.projectnessie.spark.extensions.NessieSparkSessionExtensions")
+            # S3/MinIO configuration
             .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT)
             .config("spark.hadoop.fs.s3a.access.key", "minioadmin")
             .config("spark.hadoop.fs.s3a.secret.key", "minioadmin")
