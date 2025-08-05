@@ -1,3 +1,4 @@
+import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
@@ -8,10 +9,14 @@ NESSIE_URI = "http://localhost:19120/api/v1"  # Use localhost since running outs
 WAREHOUSE_PATH = "s3a://warehouse" # 'warehouse' is the bucket name in MinIO
 MINIO_ENDPOINT = "http://localhost:9000"  # Use localhost since running outside Docker
 
+LOCAL_DATA_DIR = sys.environ.get("LOCAL_DATA_DIR") # Get the local data directory from environment variable
+if not LOCAL_DATA_DIR:
+    raise ValueError("LOCAL_DATA_DIR environment variable is not set. Please set it to the path where your data files are located.")
+
 # Input data paths within the container
 # We will mount the local ./data directory to /data inside the Spark container.
-USERS_DATA_PATH = "/Volumes/BigData/Users/borisbesky/Repo/ecommerce-platform/data/users.csv"
-PRODUCTS_DATA_PATH = "/Volumes/BigData/Users/borisbesky/Repo/ecommerce-platform/data/products.csv"
+USERS_DATA_PATH = "{LOCAL_DATA_DIR}/users.csv"
+PRODUCTS_DATA_PATH = "{LOCAL_DATA_DIR}/products.csv"
 
 def main():
     """
