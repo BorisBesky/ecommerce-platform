@@ -5,3 +5,4 @@
 __pycache__/
 
 data/clickstream2.json
+data/minio/
