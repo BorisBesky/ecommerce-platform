@@ -1,15 +1,10 @@
+import argparse
 import csv
 import json
 import os
 import random
 import uuid
 from datetime import datetime, timedelta
-
-# --- Configuration ---
-NUM_USERS = 200
-NUM_PRODUCTS = 100
-NUM_EVENTS = 10000
-OUTPUT_DIR = '../data'
 
 # --- Sample Data ---
 FIRST_NAMES = ['John', 'Jane', 'Peter', 'Mary', 'Chris', 'Pat', 'Alex', 'Sam', 'Taylor', 'Jordan']
@@ -102,7 +97,37 @@ def generate_clickstream(file_path, user_ids, product_ids):
     print(f"Successfully generated {NUM_EVENTS}+ events in '{file_path}'")
 
 
-if __name__ == '__main__':
+def main():
+    global NUM_USERS, NUM_PRODUCTS, NUM_EVENTS, OUTPUT_DIR
+    NUM_USERS = 200
+    NUM_PRODUCTS = 100
+    NUM_EVENTS = 10000
+    OUTPUT_DIR = '../data'
+    
+    parser = argparse.ArgumentParser(description='Generate mock ecommerce data')
+    parser.add_argument('data_type', 
+                       choices=['users', 'products', 'clickstream', 'all'],
+                       help='Type of data to generate: users, products, clickstream, or all')
+    parser.add_argument('--output-dir', '-o', 
+                       default=OUTPUT_DIR,  # Now we can reference the global
+                       help=f'Output directory (default: {OUTPUT_DIR})')
+    parser.add_argument('--num-users', 
+                       type=int, default=NUM_USERS,  # Reference the global
+                       help=f'Number of users to generate (default: {NUM_USERS})')
+    parser.add_argument('--num-products', 
+                       type=int, default=NUM_PRODUCTS,  # Reference the global
+                       help=f'Number of products to generate (default: {NUM_PRODUCTS})')
+    parser.add_argument('--num-events', 
+                       type=int, default=NUM_EVENTS,  # Reference the global
+                       help=f'Number of clickstream events to generate (default: {NUM_EVENTS})')
+    
+    args = parser.parse_args()
+    
+    NUM_USERS = args.num_users
+    NUM_PRODUCTS = args.num_products
+    NUM_EVENTS = args.num_events
+    OUTPUT_DIR = args.output_dir
+    
     # Create the output directory if it doesn't exist
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
@@ -110,11 +135,44 @@ if __name__ == '__main__':
 
     users_file = os.path.join(OUTPUT_DIR, 'users.csv')
     products_file = os.path.join(OUTPUT_DIR, 'products.csv')
-    clickstream_file = os.path.join(OUTPUT_DIR, 'clickstream.json')
+    clickstream_file = os.path.join(OUTPUT_DIR, 'clickstream-' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S') +  '.json')
 
-    user_ids = generate_users(users_file)
-    product_ids = generate_products(products_file)
-    generate_clickstream(clickstream_file, user_ids, product_ids)
+    user_ids = []
+    product_ids = []
 
-    print("\nMock data generation complete.")
+    if args.data_type in ['users', 'all']:
+        user_ids = generate_users(users_file)
+    
+    if args.data_type in ['products', 'all']:
+        product_ids = generate_products(products_file)
+    
+    if args.data_type in ['clickstream', 'all']:
+        # For clickstream generation, we need user and product IDs
+        if not user_ids:
+            # Load existing user IDs if they weren't just generated
+            if os.path.exists(users_file):
+                with open(users_file, 'r') as f:
+                    reader = csv.DictReader(f)
+                    user_ids = [row['user_id'] for row in reader]
+            else:
+                print("Warning: No users file found. Generating users first...")
+                user_ids = generate_users(users_file)
+        
+        if not product_ids:
+            # Load existing product IDs if they weren't just generated
+            if os.path.exists(products_file):
+                with open(products_file, 'r') as f:
+                    reader = csv.DictReader(f)
+                    product_ids = [row['product_id'] for row in reader]
+            else:
+                print("Warning: No products file found. Generating products first...")
+                product_ids = generate_products(products_file)
+        
+        generate_clickstream(clickstream_file, user_ids, product_ids)
+
+    print(f"\nMock data generation complete for: {args.data_type}")
+
+
+if __name__ == '__main__':
+    main()
 

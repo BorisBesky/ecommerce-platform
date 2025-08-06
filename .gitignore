@@ -1,8 +1,11 @@
 .venv/
+.DS_Store
+.venv*/
 .env.local
 .env
 *.pyc
 __pycache__/
 
 data/clickstream2.json
+data/clickstream-*.json
 data/minio/
