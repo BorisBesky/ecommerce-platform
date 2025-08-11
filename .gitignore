@@ -1,6 +1,6 @@
 .venv/
 .DS_Store
-.venv*/
+spark-apps/.venv/
 .env.local
 .env
 *.pyc

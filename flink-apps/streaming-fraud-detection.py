@@ -27,17 +27,27 @@ def main():
     # 1. Set up the streaming environment
     # ===============================================================
     env = StreamExecutionEnvironment.get_execution_environment()
+    # Ensure periodic checkpoints so Iceberg commits data (commits happen on checkpoints)
+    env.enable_checkpointing(10000)  # 10s
+
     t_env = StreamTableEnvironment.create(stream_execution_environment=env)
+
+    # Also set runtime and checkpoint settings via Table API configuration
+    cfg = t_env.get_config().get_configuration()
+    cfg.set_string("execution.runtime-mode", "STREAMING")
+    cfg.set_string("execution.checkpointing.mode", "EXACTLY_ONCE")
+    cfg.set_string("execution.checkpointing.interval", "10 s")
+    # Use a local checkpoint directory inside the container
+    cfg.set_string("state.checkpoints.dir", "file:///tmp/flink-checkpoints")
 
     # Add the necessary JAR files to the Flink cluster's classpath.
     # This is crucial for PyFlink to use Java-based connectors.
     # These paths correspond to where we will mount the JARs in the container.
     t_env.get_config().set(
         "pipeline.jars",
-        "file:///flink-jars/iceberg-flink-runtime-1.4.3.jar;"
-        "file:///flink-jars/hadoop-common-3.3.4.jar;"
-        "file:///flink-jars/hadoop-aws-3.3.4.jar;"
-        "file:///flink-jars/aws-java-sdk-bundle-1.12.665.jar"
+    "file:///flink-jars/iceberg-flink-runtime-1.4.3.jar;"
+    "file:///flink-jars/hadoop-common-3.3.4.jar;"
+    "file:///flink-jars/hadoop-aws-3.3.4.jar"
     )
 
     # 2. Create the Nessie Iceberg Catalog
@@ -86,8 +96,11 @@ def main():
             .watermark("event_time", "event_time - INTERVAL '5' SECOND")
             .build()
         )
-        .option("path", SOURCE_DATA_PATH)
+    # Monitor the data dir, but only match top-level clickstream JSON files to avoid nested dirs
+    .option("path", SOURCE_DATA_PATH)
+    .option("source.path.regex-pattern", r"^file:/data/clickstream-.*\\.json$")
         .option("json.ignore-parse-errors", "true")
+        .option("source.monitor-interval", "5s")
         .format("json")
         .build()
     )
