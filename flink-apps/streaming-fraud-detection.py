@@ -98,9 +98,9 @@ def main():
         )
     # Monitor the data dir, but only match top-level clickstream JSON files to avoid nested dirs
     .option("path", SOURCE_DATA_PATH)
-    .option("source.path.regex-pattern", r"^file:/data/clickstream-.*\\.json$")
+    # Process all existing files
+    .option("source.path.regex-pattern", ".*clickstream.*\\.json")
         .option("json.ignore-parse-errors", "true")
-        .option("source.monitor-interval", "5s")
         .format("json")
         .build()
     )

@@ -10,7 +10,5 @@ cd ../docker
 # The S3 bucket is configured to use MinIO as the storage backend
 # The job will run in the Flink job manager container
 
-docker-compose exec flink-jobmanager flink run \
-  --python /apps/streaming-fraud-detection.py \
-  --pyRequirements /apps/requirements.txt \
-  -d
+docker-compose exec -T flink-jobmanager bash -lc \
+  "flink run --detached -py /apps/streaming-fraud-detection.py --pyRequirements /apps/requirements.txt"
