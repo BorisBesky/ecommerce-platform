@@ -58,6 +58,9 @@ services:
     ports:
       - "8081:8081"
     command: jobmanager
+    depends_on:
+      - minio
+      - nessie
     environment:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=minioadmin
@@ -65,6 +68,9 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
+        s3.endpoint: http://minio:9000
+        s3.path-style-access: true
+        s3.ssl.enabled: false
     volumes:
       - ../flink-apps:/apps
       - ../data:/data
@@ -75,6 +81,8 @@ services:
       dockerfile: docker/Dockerfile.flink
     depends_on:
       - flink-jobmanager
+      - minio
+      - nessie
     command: taskmanager
     environment:
       - AWS_REGION=us-east-1
@@ -84,6 +92,9 @@ services:
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 2
+        s3.endpoint: http://minio:9000
+        s3.path-style-access: true
+        s3.ssl.enabled: false
     volumes:
       - ../flink-apps:/apps
       - ../data:/data

@@ -96,13 +96,13 @@ def main():
             .watermark("event_time", "event_time - INTERVAL '5' SECOND")
             .build()
         )
-    # Monitor the data dir, but only match top-level clickstream JSON files to avoid nested dirs
-    .option("path", SOURCE_DATA_PATH)
-    # Process all existing files
-    .option("source.path.regex-pattern", ".*clickstream.*\\.json")
-        .option("json.ignore-parse-errors", "true")
-        .format("json")
-        .build()
+        # Monitor the data dir, but only match top-level clickstream JSON files to avoid nested dirs
+        .option("path", SOURCE_DATA_PATH)
+        # Process all existing files
+        .option("source.path.regex-pattern", ".*clickstream.*\\.json")
+            .option("json.ignore-parse-errors", "true")
+            .format("json")
+            .build()
     )
     
     source_table = t_env.from_descriptor(source_descriptor)
@@ -150,7 +150,7 @@ def main():
     
     # Now insert the results from our query
     print("Submitting job to write to Iceberg table 'demo.fraud_attempts'...")
-    fraud_attempts.execute_insert("fraud_attempts").wait()
+    fraud_attempts.execute_insert("fraud_attempts")
     
     print("Job submitted successfully!")
 

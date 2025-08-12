@@ -1,2 +1,4 @@
 s3fs
 boto3
+ray[train]
+surprise
