@@ -7,7 +7,7 @@ This directory contains the configuration and scripts needed to run the recommen
 - `ray-job.recommendations-training.yaml` - RayJob configuration for Kubernetes
 - `deploy-recommendations-k8s.sh` - Script to deploy the training job (Kubernetes-compatible)
 - `deploy-recommendations-training.sh` - Original deployment script (for environments with shared filesystems)
-- `prepare-data.py` - Script to prepare clickstream data for training
+- `../tools/prepare-data.py` - Script to prepare clickstream data for training
 - `validate-config.sh` - Script to validate configuration and prerequisites
 - `ray-job.pytorch-mnist.yaml` - Original PyTorch MNIST example (reference)
 
@@ -109,7 +109,7 @@ The job uses a custom FunkSVD (Funk Singular Value Decomposition) implementation
    # Check if data files exist
    ls -la ../data/clickstream-*.json
    # Run data preparation
-   ./prepare-data.py
+   ../tools/prepare-data.py
    ```
 
 2. **"KubeRay operator not found"**

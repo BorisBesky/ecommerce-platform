@@ -48,10 +48,11 @@ fi
 # Step 2: Upload data to MinIO
 echo ""
 echo "📤 Step 2: Uploading clickstream data to MinIO..."
-if [ -f "upload-data-to-minio.py" ]; then
-    python3 upload-data-to-minio.py
+UPLOAD_SCRIPT="../tools/upload-data-to-minio.py"
+if [ -f "$UPLOAD_SCRIPT" ]; then
+    python3 "$UPLOAD_SCRIPT"
 else
-    echo "❌ upload-data-to-minio.py not found"
+    echo "❌ $UPLOAD_SCRIPT not found"
     exit 1
 fi
 
