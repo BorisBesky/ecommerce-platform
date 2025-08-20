@@ -1,0 +1,81 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-recommendations-training
+spec:
+  shutdownAfterJobFinishes: true
+  entrypoint: python /apps/train_recommendation_model_minio.py
+  runtimeEnvYAML: |
+    pip:
+      - numpy<2
+      - pandas
+      - boto3
+      - s3fs
+    env_vars:
+      RAY_ADDRESS: "auto"
+      MINIO_ENDPOINT: "http://host.docker.internal:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+
+  # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
+  rayClusterSpec:
+    rayVersion: '2.46.0'
+    headGroupSpec:
+      rayStartParams: {}
+      # Pod template
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.46.0
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265 # Ray dashboard
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            volumeMounts:
+            - name: training-script
+              mountPath: /apps
+              readOnly: true
+            resources:
+              limits:
+                cpu: "2"
+                memory: "8Gi"
+              requests:
+                cpu: "1"
+                memory: "4Gi"
+          volumes:
+          - name: training-script
+            configMap:
+              name: ray-training-script
+              defaultMode: 0755
+    workerGroupSpecs:
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 3
+      groupName: recommendation-workers
+      rayStartParams: {}
+      # Pod template
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.46.0
+            volumeMounts:
+            - name: training-script
+              mountPath: /apps
+              readOnly: true
+            resources:
+              limits:
+                cpu: "2"
+                memory: "6Gi"
+              requests:
+                cpu: "1"
+                memory: "3Gi"
+          volumes:
+          - name: training-script
+            configMap:
+              name: ray-training-script
+              defaultMode: 0755

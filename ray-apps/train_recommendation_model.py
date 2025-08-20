@@ -1,17 +1,21 @@
-import ray
-import pandas as pd
-import boto3
+import os
+import glob
+import math
 import pickle
+from typing import Dict, Tuple, Optional
+import warnings
+
+import numpy as np
+import pandas as pd
+import ray
+import boto3
 from botocore.config import Config
 
-# Import ML libraries for the training job
-# We will use scikit-surprise directly, as the Ray Train wrapper has been removed.
-from surprise import Dataset, Reader, SVD
-from surprise.model_selection import train_test_split
-from surprise import accuracy
-
 # --- Configuration ---
-RAY_ADDRESS = "ray://ray-head:10001"
+# Ray connection address strategy:
+# - If RAY_ADDRESS env var is set, use that (e.g., "ray://ray-head:10001" or "ray-head:6379" or "auto").
+# - Otherwise, try a sensible sequence for in-cluster runs: auto -> tcp -> client.
+RAY_ADDRESS = os.environ.get("RAY_ADDRESS")
 # NOTE: We are not reading from Iceberg in this version to simplify the training logic,
 # but the principle of loading data first remains the same.
 MINIO_ENDPOINT = "http://minio:9000"
@@ -20,7 +24,90 @@ MINIO_SECRET_KEY = "minioadmin"
 S3_BUCKET = "warehouse"
 OUTPUT_MODEL_KEY = "models/recommendation_model.pkl"
 # This assumes the 'data' directory is mounted at /data in the Ray container.
-CLICKSTREAM_DATA_PATH = "/data/clickstream.json"
+CLICKSTREAM_DATA_PATH = "/data/clickstream.json"  # container path; we'll fallback locally
+
+# ------------------------
+# Simple FunkSVD (SGD) Recommender (pure NumPy)
+# ------------------------
+class FunkSVD:
+    def __init__(self, n_factors=20, n_epochs=10, lr=0.005, reg=0.05, random_state=42):
+        self.n_factors = n_factors
+        self.n_epochs = n_epochs
+        self.lr = lr
+        self.reg = reg
+        self.random_state = random_state
+        self.user_factors = None  # type: Optional[np.ndarray]
+        self.item_factors = None  # type: Optional[np.ndarray]
+        self.user_map = {}  # type: Dict
+        self.item_map = {}  # type: Dict
+        self.user_inv = {}  # type: Dict
+        self.item_inv = {}  # type: Dict
+
+    def fit(self, df: pd.DataFrame) -> None:
+        # df has columns: user_id, product_id, rating
+        users = df['user_id'].unique().tolist()
+        items = df['product_id'].unique().tolist()
+        self.user_map = {u: i for i, u in enumerate(users)}
+        self.item_map = {m: i for i, m in enumerate(items)}
+        self.user_inv = {i: u for u, i in self.user_map.items()}
+        self.item_inv = {i: m for m, i in self.item_map.items()}
+
+        n_users = len(users)
+        n_items = len(items)
+        rng = np.random.default_rng(self.random_state)
+        self.user_factors = 0.01 * rng.standard_normal((n_users, self.n_factors))
+        self.item_factors = 0.01 * rng.standard_normal((n_items, self.n_factors))
+
+        # Build training triples
+        ui = df['user_id'].map(self.user_map).to_numpy()
+        ii = df['product_id'].map(self.item_map).to_numpy()
+        rr = df['rating'].astype(float).to_numpy()
+
+        for epoch in range(self.n_epochs):
+            # Shuffle indices each epoch
+            order = rng.permutation(len(rr))
+            se = 0.0
+            for idx in order:
+                u = ui[idx]
+                i = ii[idx]
+                r = rr[idx]
+                pu = self.user_factors[u]
+                qi = self.item_factors[i]
+                pred = float(np.dot(pu, qi))
+                err = r - pred
+                # Clip error to keep updates stable
+                if err > 5.0:
+                    err = 5.0
+                elif err < -5.0:
+                    err = -5.0
+                se += err * err
+                # SGD updates
+                self.user_factors[u] += self.lr * (err * qi - self.reg * pu)
+                self.item_factors[i] += self.lr * (err * pu - self.reg * qi)
+                # Clamp factor values to avoid explosion
+                self.user_factors[u] = np.clip(self.user_factors[u], -5.0, 5.0)
+                self.item_factors[i] = np.clip(self.item_factors[i], -5.0, 5.0)
+            rmse = math.sqrt(se / max(len(rr), 1))
+            print("Epoch {}/{} - RMSE: {:.4f}".format(epoch + 1, self.n_epochs, rmse))
+
+    def predict_one(self, user_id, item_id) -> float:
+        if self.user_factors is None or self.item_factors is None:
+            raise RuntimeError("Model not fitted")
+        u = self.user_map.get(user_id)
+        i = self.item_map.get(item_id)
+        if u is None or i is None:
+            return 0.0
+        return float(np.dot(self.user_factors[u], self.item_factors[i]))
+
+    def test(self, df: pd.DataFrame) -> Tuple[float, int]:
+        # Returns (rmse, n)
+        errs = []
+        for _, row in df.iterrows():
+            pred = self.predict_one(row['user_id'], row['product_id'])
+            errs.append((row['rating'] - pred) ** 2)
+        n = len(errs)
+        rmse = math.sqrt(float(np.mean(errs))) if n else float('nan')
+        return rmse, n
 
 def main():
     """
@@ -30,86 +117,125 @@ def main():
     try:
         # 1. Initialize Ray and Connect to the Cluster
         # =================================================================
-        print(f"Initializing Ray and connecting to cluster at {RAY_ADDRESS}...")
-        # We connect to the cluster to show orchestration, even if training is local.
-        ray.init(address=RAY_ADDRESS, ignore_reinit_error=True)
-        print("Successfully connected to Ray cluster.")
+        # Build address attempts
+        if RAY_ADDRESS:
+            attempts = [RAY_ADDRESS]
+        else:
+            attempts = ["auto", "ray-head:6379", "ray://ray-head:10001"]
+
+        last_err = None
+        connected = False
+        for addr in attempts:
+            try:
+                print(f"Connecting to Ray with address='{addr}'...")
+                ctx = ray.init(address=addr, ignore_reinit_error=True)
+                print(f"Ray initialized. Dashboard: {ctx.address_info.get('webui_url')}")
+                last_err = None
+                connected = True
+                break
+            except Exception as conn_err:
+                print(f"Ray init failed for address '{addr}': {conn_err}")
+                last_err = conn_err
+        if not connected:
+            warnings.warn(
+                f"Ray connection failed; proceeding without Ray. Last error: {last_err}")
+        else:
+            print("Ray initialized successfully.")
 
         # 2. Load and Prepare Data for Training
         # =================================================================
         # For this example, we'll read the local JSON. In a production scenario,
         # you would use ray.data to read from an Iceberg table here.
-        print(f"Loading 'clickstream' data from {CLICKSTREAM_DATA_PATH}...")
-        clickstream_df = pd.read_json(CLICKSTREAM_DATA_PATH, lines=True)
-        
+        # Resolve clickstream path: prefer container path, else latest local file(s)
+        data_path = CLICKSTREAM_DATA_PATH
+        if not os.path.exists(data_path):
+            local_glob = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'clickstream-*.json'))
+            files = sorted(glob.glob(local_glob))
+            if not files:
+                raise FileNotFoundError(f"No clickstream json found at {data_path} or {local_glob}")
+            # Option: concat all files
+            print(f"Loading local clickstream files ({len(files)} found)...")
+            clickstream_df = pd.concat([pd.read_json(fp, lines=True) for fp in files], ignore_index=True)
+        else:
+            print(f"Loading 'clickstream' data from {data_path}...")
+            clickstream_df = pd.read_json(data_path, lines=True)
+
         # --- Feature Engineering: Create user-item "ratings" ---
         event_weights = {
             'view': 1.0,
             'add_to_cart': 3.0,
             'purchase': 5.0,
-            'payment_failed': -2.0
+            'payment_failed': -2.0,
         }
         clickstream_df['rating'] = clickstream_df['event_type'].map(event_weights)
-        
-        ratings_df = clickstream_df.groupby(['user_id', 'product_id'])['rating'].sum().reset_index()
+
+        ratings_df = (
+            clickstream_df.groupby(['user_id', 'product_id'])['rating']
+            .sum()
+            .reset_index()
+        )
         print(f"Created {len(ratings_df)} user-item ratings from clickstream data.")
 
-        # 3. Train the Recommendation Model (Directly with Surprise)
+        # 3. Train the Recommendation Model (Pure NumPy FunkSVD)
         # =================================================================
-        print("Preparing data for scikit-surprise...")
-        reader = Reader(rating_scale=(ratings_df['rating'].min(), ratings_df['rating'].max()))
-        data = Dataset.load_from_df(ratings_df[['user_id', 'product_id', 'rating']], reader)
-        
-        # Split data into training and testing sets
-        trainset, testset = train_test_split(data, test_size=0.2)
+        print("Splitting data into train/test...")
+        # Simple split
+        shuffled = ratings_df.sample(frac=1.0, random_state=42).reset_index(drop=True)
+        split_idx = int(0.8 * len(shuffled))
+        train_df = shuffled.iloc[:split_idx]
+        test_df = shuffled.iloc[split_idx:]
 
-        # Define and train the SVD algorithm
-        print("Training SVD model directly...")
-        algo = SVD(
-            n_epochs=10,
-            lr_all=0.005,
-            reg_all=0.02,
-            verbose=True
-        )
-        algo.fit(trainset)
-        
+        print("Training FunkSVD model (pure NumPy)...")
+        model = FunkSVD(n_factors=20, n_epochs=10, lr=0.01, reg=0.02, random_state=42)
+        model.fit(train_df)
+
         # Evaluate the model
-        predictions = algo.test(testset)
-        rmse = accuracy.rmse(predictions)
+        rmse, n = model.test(test_df)
 
         print("\n--- Training Result ---")
         print(f"Training finished. Final model accuracy (RMSE): {rmse:.4f}")
         print("-----------------------\n")
-        
-        # The trained model is the 'algo' object itself
-        trained_model = algo
+
+        trained_model = model
 
         # 4. Save the Trained Model to MinIO
         # =================================================================
-        print(f"Saving trained model to S3 bucket '{S3_BUCKET}' at '{OUTPUT_MODEL_KEY}'...")
-        
+        print(
+            f"Saving trained model to S3 bucket '{S3_BUCKET}' at '{OUTPUT_MODEL_KEY}'..."
+        )
+
         model_bytes = pickle.dumps(trained_model)
 
         s3_client = boto3.client(
             's3',
             endpoint_url=MINIO_ENDPOINT,
             aws_access_key_id=MINIO_ACCESS_KEY,
-            aws_secret_key=MINIO_SECRET_KEY,
-            config=Config(signature_version='s3v4')
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            config=Config(signature_version='s3v4'),
         )
-        
-        s3_client.put_object(
-            Bucket=S3_BUCKET,
-            Key=OUTPUT_MODEL_KEY,
-            Body=model_bytes
-        )
-        print("Model artifact saved successfully.")
+
+        try:
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=OUTPUT_MODEL_KEY,
+                Body=model_bytes,
+            )
+            print("Model artifact saved successfully.")
+        except Exception as s3e:
+            # Fallback to local save
+            local_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'models'))
+            os.makedirs(local_dir, exist_ok=True)
+            local_path = os.path.join(local_dir, 'recommendation_model.pkl')
+            with open(local_path, 'wb') as f:
+                f.write(model_bytes)
+            print(f"S3 save failed ({s3e}); saved locally to {local_path}.")
 
     except Exception as e:
         print(f"An error occurred during the Ray job: {e}")
     finally:
-        print("Shutting down Ray connection.")
-        ray.shutdown()
+        if ray.is_initialized():
+            print("Shutting down Ray connection.")
+            ray.shutdown()
 
 if __name__ == "__main__":
     main()

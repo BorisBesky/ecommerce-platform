@@ -1,4 +1,6 @@
+numpy<2
+pandas
 s3fs
 boto3
-ray[train]
-surprise
+# Pin Ray to match the base image version to avoid client/runtime mismatch
+ray[train]==2.8.0
