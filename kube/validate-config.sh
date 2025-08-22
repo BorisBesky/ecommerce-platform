@@ -63,7 +63,7 @@ if [ -f "$MERGED_FILE" ]; then
     RECORDS=$(wc -l < "$MERGED_FILE")
     echo "   📊 Contains $RECORDS records"
 else
-    echo "⚠️  Merged clickstream file not found. Run ./prepare-data.py first"
+    echo "⚠️  Merged clickstream file not found. Run ../tools/prepare-data.py first"
 fi
 
 # Check if KubeRay CRDs are installed
@@ -114,7 +114,7 @@ echo "✅ Configuration validated successfully!"
 echo ""
 echo "📋 Next steps:"
 if [ ! -f "$MERGED_FILE" ]; then
-    echo "1. Run: ./prepare-data.py"
+    echo "1. Run: ../tools/prepare-data.py"
 fi
 echo "2. Deploy: ./deploy-recommendations-training.sh"
 echo "3. Monitor: kubectl get rayjob rayjob-recommendations-training"
