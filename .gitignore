@@ -9,3 +9,9 @@ __pycache__/
 data/clickstream2.json
 data/clickstream-*.json
 data/minio/
+
+# Legacy deployment files (moved to legacy/)
+legacy/
+
+# Temporary files
+tmp/

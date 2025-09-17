@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-config
+  namespace: ecommerce-platform
+data:
+  spark-defaults.conf: |
+    spark.master                    spark://spark-master:7077
+    spark.sql.warehouse.dir         /tmp/spark-warehouse
+    spark.sql.adaptive.enabled     true
+    spark.sql.adaptive.coalescePartitions.enabled  true
+    spark.executor.memory           2g
+    spark.executor.cores            2
+    spark.driver.memory             1g
+    spark.driver.cores              1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-master
+  namespace: ecommerce-platform
+spec:
+  selector:
+    app: spark
+    component: master
+  ports:
+    - name: web-ui
+      port: 8080
+      targetPort: 8080
+    - name: spark
+      port: 7077
+      targetPort: 7077
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-worker
+  namespace: ecommerce-platform
+spec:
+  selector:
+    app: spark
+    component: worker
+  ports:
+    - name: web-ui
+      port: 8081
+      targetPort: 8081
+  clusterIP: None  # Headless service for workers
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-master
+  namespace: ecommerce-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark
+      component: master
+  template:
+    metadata:
+      labels:
+        app: spark
+        component: master
+    spec:
+      containers:
+      - name: spark-master
+        image: bitnami/spark:3.5.0
+        env:
+        - name: SPARK_MODE
+          value: "master"
+        - name: SPARK_MASTER_HOST
+          value: "0.0.0.0"
+        - name: SPARK_MASTER_PORT
+          value: "7077"
+        - name: SPARK_MASTER_WEBUI_PORT
+          value: "8080"
+        ports:
+        - containerPort: 7077
+          name: spark
+        - containerPort: 8080
+          name: web-ui
+        volumeMounts:
+        - name: spark-config
+          mountPath: /opt/bitnami/spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+        - name: data
+          mountPath: /data
+        - name: apps
+          mountPath: /apps
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: spark-config
+        configMap:
+          name: spark-config
+      - name: data
+        emptyDir: {}
+      - name: apps
+        configMap:
+          name: spark-apps
+          defaultMode: 0755
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-worker
+  namespace: ecommerce-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: spark
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: spark
+        component: worker
+    spec:
+      containers:
+      - name: spark-worker
+        image: bitnami/spark:3.5.0
+        env:
+        - name: SPARK_MODE
+          value: "worker"
+        - name: SPARK_MASTER_URL
+          value: "spark://spark-master:7077"
+        - name: SPARK_WORKER_CORES
+          value: "2"
+        - name: SPARK_WORKER_MEMORY
+          value: "2g"
+        - name: SPARK_WORKER_PORT
+          value: "8881"
+        - name: SPARK_WORKER_WEBUI_PORT
+          value: "8081"
+        ports:
+        - containerPort: 8881
+          name: spark
+        - containerPort: 8081
+          name: web-ui
+        volumeMounts:
+        - name: spark-config
+          mountPath: /opt/bitnami/spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+        - name: data
+          mountPath: /data
+        - name: apps
+          mountPath: /apps
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+          limits:
+            cpu: 2000m
+            memory: 3Gi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: spark-config
+        configMap:
+          name: spark-config
+      - name: data
+        emptyDir: {}
+      - name: apps
+        configMap:
+          name: spark-apps
+          defaultMode: 0755
