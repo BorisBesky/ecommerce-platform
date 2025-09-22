@@ -2,9 +2,10 @@ apiVersion: ray.io/v1
 kind: RayJob
 metadata:
   name: rayjob-recommendations-training
+  namespace: ecommerce-platform
 spec:
   shutdownAfterJobFinishes: true
-  entrypoint: python /apps/train_recommendation_model_minio.py
+  entrypoint: python /apps/train_recommendation_model_k8s.py
   runtimeEnvYAML: |
     pip:
       - numpy<2
@@ -13,7 +14,7 @@ spec:
       - s3fs
     env_vars:
       RAY_ADDRESS: "auto"
-      MINIO_ENDPOINT: "http://host.docker.internal:9000"
+      MINIO_ENDPOINT: "http://minio:9000"
       MINIO_ACCESS_KEY: "minioadmin"
       MINIO_SECRET_KEY: "minioadmin"
 
@@ -24,6 +25,10 @@ spec:
       rayStartParams: {}
       # Pod template
       template:
+        metadata:
+          labels:
+            app: ray
+            component: head
         spec:
           containers:
           - name: ray-head
@@ -59,6 +64,10 @@ spec:
       rayStartParams: {}
       # Pod template
       template:
+        metadata:
+          labels:
+            app: ray
+            component: worker
         spec:
           containers:
           - name: ray-worker
