@@ -4,20 +4,7 @@ metadata:
   name: flink-config
   namespace: ecommerce-platform
 data:
-  flink-conf.yaml: |
-    jobmanager.rpc.address: flink-jobmanager
-    taskmanager.numberOfTaskSlots: 2
-    parallelism.default: 2
-    jobmanager.memory.process.size: 1600m
-    taskmanager.memory.process.size: 1728m
-    taskmanager.memory.flink.size: 1280m
-    execution.checkpointing.interval: 10s
-    execution.checkpointing.mode: EXACTLY_ONCE
-    state.backend: rocksdb
-    state.checkpoints.dir: file:///tmp/flink-checkpoints
-    s3.endpoint: http://minio:9000
-    s3.path-style-access: true
-    s3.ssl.enabled: false
+  # Only keep logging configuration here; core Flink config will be injected via FLINK_PROPERTIES env var
   log4j-console.properties: |
     log4j.rootLogger=INFO, console
     log4j.appender.console=org.apache.log4j.ConsoleAppender
@@ -83,8 +70,7 @@ spec:
       containers:
       - name: flink-jobmanager
         image: flink:1.18-scala_2.12
-        args:
-        - jobmanager
+        args: ["jobmanager"]
         env:
         - name: AWS_REGION
           value: "us-east-1"
@@ -92,15 +78,32 @@ spec:
           value: "minioadmin"
         - name: AWS_SECRET_ACCESS_KEY
           value: "minioadmin"
+        - name: FLINK_PROPERTIES
+          value: |-
+            jobmanager.rpc.address: flink-jobmanager
+            jobmanager.rpc.port: 6123
+            taskmanager.rpc.port: 6122
+            data.port: 6121
+            taskmanager.numberOfTaskSlots: 2
+            parallelism.default: 2
+            jobmanager.memory.process.size: 1600m
+            taskmanager.memory.process.size: 1728m
+            taskmanager.memory.flink.size: 1280m
+            execution.checkpointing.interval: 10s
+            execution.checkpointing.mode: EXACTLY_ONCE
+            state.backend: rocksdb
+            state.checkpoints.dir: file:///tmp/flink-checkpoints
+            kubernetes.cluster-id: flink-cluster
+            kubernetes.taskmanager.service-account: default
+            s3.endpoint: http://minio:9000
+            s3.path-style-access: true
+            s3.ssl.enabled: false
         ports:
         - containerPort: 6123
           name: rpc
         - containerPort: 8081
           name: web-ui
         volumeMounts:
-        - name: flink-config
-          mountPath: /opt/flink/conf/flink-conf.yaml
-          subPath: flink-conf.yaml
         - name: flink-config
           mountPath: /opt/flink/conf/log4j-console.properties
           subPath: log4j-console.properties
@@ -162,8 +165,7 @@ spec:
       containers:
       - name: flink-taskmanager
         image: flink:1.18-scala_2.12
-        args:
-        - taskmanager
+        args: ["taskmanager"]
         env:
         - name: AWS_REGION
           value: "us-east-1"
@@ -171,6 +173,26 @@ spec:
           value: "minioadmin"
         - name: AWS_SECRET_ACCESS_KEY
           value: "minioadmin"
+        - name: FLINK_PROPERTIES
+          value: |-
+            jobmanager.rpc.address: flink-jobmanager
+            jobmanager.rpc.port: 6123
+            taskmanager.rpc.port: 6122
+            data.port: 6121
+            taskmanager.numberOfTaskSlots: 2
+            parallelism.default: 2
+            jobmanager.memory.process.size: 1600m
+            taskmanager.memory.process.size: 1728m
+            taskmanager.memory.flink.size: 1280m
+            execution.checkpointing.interval: 10s
+            execution.checkpointing.mode: EXACTLY_ONCE
+            state.backend: rocksdb
+            state.checkpoints.dir: file:///tmp/flink-checkpoints
+            kubernetes.cluster-id: flink-cluster
+            kubernetes.taskmanager.service-account: default
+            s3.endpoint: http://minio:9000
+            s3.path-style-access: true
+            s3.ssl.enabled: false
         ports:
         - containerPort: 6121
           name: data
@@ -179,9 +201,6 @@ spec:
         - containerPort: 6125
           name: query
         volumeMounts:
-        - name: flink-config
-          mountPath: /opt/flink/conf/flink-conf.yaml
-          subPath: flink-conf.yaml
         - name: flink-config
           mountPath: /opt/flink/conf/log4j-console.properties
           subPath: log4j-console.properties
@@ -201,13 +220,15 @@ spec:
         livenessProbe:
           tcpSocket:
             port: 6122
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 30
+          failureThreshold: 6
         readinessProbe:
           tcpSocket:
             port: 6122
-          initialDelaySeconds: 10
+          initialDelaySeconds: 25
           periodSeconds: 10
+          failureThreshold: 6
       volumes:
       - name: flink-config
         configMap:
