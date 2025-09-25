@@ -78,7 +78,7 @@ if kubectl cluster-info &> /dev/null; then
     print_status "INFO" "Current context: $cluster_name"
     
     # Check cluster version
-    k8s_version=$(kubectl version --short 2>/dev/null | grep "Server Version" | cut -d' ' -f3 || echo "unknown")
+    k8s_version=$(kubectl version 2>/dev/null | grep "Server Version" | cut -d' ' -f3 || echo "unknown")
     print_status "INFO" "Kubernetes version: $k8s_version"
     
 else
