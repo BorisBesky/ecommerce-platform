@@ -177,10 +177,25 @@ ecommerce-platform/
    kubectl create configmap spark-apps --from-file=k8s/spark-apps/ -n ecommerce-platform --dry-run=client -o yaml | kubectl apply -f -
    ```
 3. Submit the job:
+
+    ```bash
+    # Ensure ConfigMap is (re)applied first if you changed files:
+    kubectl create configmap spark-apps --from-file=k8s/spark-apps/ -n ecommerce-platform \
+       --dry-run=client -o yaml | kubectl apply -f -
+
+    # Exec into the existing master pod (it already mounts /apps with your scripts):
+    MASTER_POD=$(kubectl get pods -l app=spark,component=master -n ecommerce-platform -o jsonpath='{.items[0].metadata.name}')
+    kubectl exec -n ecommerce-platform -it "$MASTER_POD" -- \
+       spark-submit --master spark://spark-master:7077 /apps/your-app.py
+    ```
+
+   If you see `ClassNotFoundException` for Iceberg or Nessie and you didn't yet restart the master after updating `spark.yaml`, delete the master pod so it picks up the `spark.jars.packages` setting:
+
    ```bash
-   kubectl run spark-job --image=bitnami/spark:3.5.0 -n ecommerce-platform --rm -i --restart=Never -- \
-     spark-submit --master spark://spark-master:7077 /apps/your-app.py
+   kubectl delete pod -l app=spark,component=master -n ecommerce-platform
    ```
+
+   (It will be recreated automatically.)
 
 #### Flink Applications
 
@@ -219,6 +234,7 @@ All applications use environment variables for configuration:
 #### Service Discovery
 
 Services use Kubernetes DNS for discovery:
+
 - `minio.ecommerce-platform.svc.cluster.local`
 - `nessie.ecommerce-platform.svc.cluster.local`
 - `spark-master.ecommerce-platform.svc.cluster.local`
@@ -256,6 +272,7 @@ kubectl get rayjob -n ecommerce-platform
 ### Health Checks
 
 All services include health checks:
+
 - **MinIO**: HTTP health endpoint
 - **Nessie**: API config endpoint
 - **Spark**: Web UI availability
@@ -339,6 +356,7 @@ kubectl scale deployment flink-taskmanager --replicas=1 -n ecommerce-platform
 #### Spark Configuration
 
 Adjust Spark resources in `k8s/spark.yaml`:
+
 - Increase `spark.executor.memory` for larger datasets
 - Adjust `spark.executor.cores` based on node capacity
 - Enable `spark.sql.adaptive.enabled` for query optimization
@@ -346,6 +364,7 @@ Adjust Spark resources in `k8s/spark.yaml`:
 #### Flink Configuration
 
 Modify Flink settings in `k8s/flink.yaml`:
+
 - Adjust `taskmanager.numberOfTaskSlots` for parallelism
 - Increase `taskmanager.memory.process.size` for complex jobs
 - Tune `execution.checkpointing.interval` for fault tolerance
@@ -353,6 +372,7 @@ Modify Flink settings in `k8s/flink.yaml`:
 #### Ray Configuration
 
 Scale Ray workers in `k8s/ray.yaml`:
+
 - Adjust `minReplicas` and `maxReplicas` for auto-scaling
 - Increase worker resources for large ML workloads
 - Configure `rayStartParams` for specific use cases
@@ -370,6 +390,7 @@ Scale Ray workers in `k8s/ray.yaml`:
 For production deployments:
 
 1. **Replace default credentials**:
+   
    ```bash
    kubectl create secret generic minio-credentials \
      --from-literal=username=<your-username> \
@@ -392,11 +413,13 @@ For production deployments:
 ### Resource Requirements
 
 **Minimum Production Setup**:
+
 - **Nodes**: 3 worker nodes, 4 CPU, 16GB RAM each
 - **Storage**: 100GB+ for data, models, and logs
 - **Network**: High bandwidth between nodes
 
 **Recommended Production Setup**:
+
 - **Nodes**: 5+ worker nodes, 8 CPU, 32GB RAM each
 - **Storage**: 500GB+ NVMe SSD storage
 - **Network**: 10Gbps+ inter-node connectivity

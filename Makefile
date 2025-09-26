@@ -16,13 +16,19 @@ DATA_OUT_DIR ?= data
 data-generate: ## Generate users, products, and clickstream (stable alias created)
 	$(PYTHON) tools/generate_data.py all --seed $(SEED) --output-dir $(DATA_OUT_DIR)
 
-upload-data: ## Upload generated users, products, clickstream.json to MinIO (requires mc and port-forward if outside cluster)
-	@echo "Ensuring warehouse bucket exists..."
-	mc mb local/warehouse || true
-	mc cp $(DATA_OUT_DIR)/users.csv local/warehouse/data/users.csv
-	mc cp $(DATA_OUT_DIR)/products.csv local/warehouse/data/products.csv
-	mc cp $(DATA_OUT_DIR)/clickstream.json local/warehouse/$(CLICKSTREAM_KEY)
-	mc ls local/warehouse/data/
+MINIO_ENDPOINT ?= http://localhost:9000
+MINIO_ACCESS_KEY ?= minioadmin
+MINIO_SECRET_KEY ?= minioadmin
+
+upload-data: ## Upload generated users, products, clickstream using Python uploader
+	$(PYTHON) tools/upload-data-to-minio.py \
+	  --endpoint $(MINIO_ENDPOINT) \
+	  --access-key $(MINIO_ACCESS_KEY) \
+	  --secret-key $(MINIO_SECRET_KEY) \
+	  --bucket $(CLICKSTREAM_BUCKET) \
+	  --data-dir $(DATA_OUT_DIR) \
+	  --prefix data \
+	  --include users products clickstream
 
 submit-sample-jobs: ## Run the unified job submission script (Spark, Flink, Ray)
 	bash k8s/submit-sample-jobs.sh
@@ -67,3 +73,7 @@ ray-portforward: ## Port-forward Ray dashboard (default 8265)
 
 minio-portforward: ## Port-forward MinIO console (9001) & API (9000)
 	kubectl port-forward svc/minio -n $(K8S_NAMESPACE) 9000:9000 9001:9001
+
+spark-portforward: ## Port-forward Spark master UI (8080) & worker UI (8081)
+	kubectl port-forward svc/spark-master -n $(K8S_NAMESPACE) 8080:8080
+	kubectl port-forward svc/spark-worker -n $(K8S_NAMESPACE) 8081:8081
