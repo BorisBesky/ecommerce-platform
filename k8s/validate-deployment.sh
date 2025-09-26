@@ -10,6 +10,16 @@ echo "=========================================================="
 
 NAMESPACE="ecommerce-platform"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RAY_DIAG=false
+
+for arg in "$@"; do
+    case $arg in
+        --ray-diagnostics)
+            RAY_DIAG=true
+            shift
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -220,14 +230,89 @@ main() {
     echo "🧠 Checking Ray Services..."
     if kubectl get crd rayjobs.ray.io &> /dev/null; then
         print_status "PASS" "KubeRay operator is installed"
-        
-        # Check if Ray job exists
-        if kubectl get rayjob rayjob-recommendations-training -n $NAMESPACE &> /dev/null; then
-            local job_status=$(kubectl get rayjob rayjob-recommendations-training -n $NAMESPACE -o jsonpath='{.status.jobStatus}' 2>/dev/null || echo "Unknown")
-            print_status "PASS" "Ray job exists (status: $job_status)"
-        else
-            print_status "WARN" "Ray job not found (this is normal if not yet deployed)"
-        fi
+            # --- Ray diagnostics helper functions (scoped inside main) ---
+            check_ray_job() {
+                local job_name=$1
+                if ! kubectl get rayjob "$job_name" -n $NAMESPACE &> /dev/null; then
+                    print_status "WARN" "RayJob '$job_name' not found (normal if not deployed)"
+                    return
+                fi
+                local job_status
+                job_status=$(kubectl get rayjob "$job_name" -n $NAMESPACE -o jsonpath='{.status.jobStatus}' 2>/dev/null || echo "Unknown")
+                case "$job_status" in
+                    RUNNING|SUCCEEDED)
+                        print_status "PASS" "RayJob '$job_name' status: $job_status"
+                        ;;
+                    FAILED)
+                        print_status "FAIL" "RayJob '$job_name' status: FAILED"
+                        ;;
+                    *)
+                        print_status "WARN" "RayJob '$job_name' status: $job_status"
+                        ;;
+                esac
+
+                # Associated RayCluster name (if already created)
+                local rc_name
+                rc_name=$(kubectl get rayjob "$job_name" -n $NAMESPACE -o jsonpath='{.status.rayClusterName}' 2>/dev/null || echo "")
+                if [[ -n "$rc_name" ]]; then
+                    local rc_state
+                    rc_state=$(kubectl get raycluster "$rc_name" -n $NAMESPACE -o jsonpath='{.status.state}' 2>/dev/null || echo "Unknown")
+                    print_status "WARN" "RayCluster '$rc_name' state: $rc_state"
+                    # Summarize cluster pods
+                    local cluster_pods
+                    cluster_pods=$(kubectl get pods -n $NAMESPACE -l ray.io/cluster="$rc_name" --no-headers 2>/dev/null || true)
+                    if [[ -n "$cluster_pods" ]]; then
+                        local running pending failed
+                        running=$(echo "$cluster_pods" | awk '$3=="Running"' | wc -l | tr -d ' ')
+                        pending=$(echo "$cluster_pods" | awk '$3=="Pending"' | wc -l | tr -d ' ')
+                        failed=$(echo "$cluster_pods" | awk '$3=="Error" || $3=="CrashLoopBackOff" || $3=="Failed"' | wc -l | tr -d ' ')
+                        if [[ "$failed" -gt 0 || "$pending" -gt 0 ]]; then
+                            print_status "WARN" "RayCluster pods: Running=$running Pending=$pending Failed=$failed"
+                        else
+                            print_status "PASS" "All RayCluster pods running ($running)"
+                        fi
+                    fi
+                fi
+
+                # Driver pods (RayJob submission pods)
+                local driver_pods
+                driver_pods=$(kubectl get pods -n $NAMESPACE -l ray.io/job-name="$job_name" --no-headers 2>/dev/null || true)
+                if [[ -z "$driver_pods" ]]; then
+                    print_status "WARN" "No driver pod yet for RayJob '$job_name'"
+                else
+                    while read -r line; do
+                        [[ -z "$line" ]] && continue
+                        local pod_name phase restarts age
+                        pod_name=$(echo "$line" | awk '{print $1}')
+                        phase=$(echo "$line" | awk '{print $3}')
+                        restarts=$(echo "$line" | awk '{print $4}')
+                        age=$(echo "$line" | awk '{print $5}')
+                        if [[ "$phase" == "Running" ]]; then
+                            print_status "PASS" "Driver pod '$pod_name' Running (restarts=$restarts age=$age)"
+                        elif [[ "$phase" == "Completed" || "$phase" == "Succeeded" ]]; then
+                            print_status "PASS" "Driver pod '$pod_name' Completed"
+                        else
+                            # Try to fetch waiting/terminated reason
+                            local reason message
+                            reason=$(kubectl get pod "$pod_name" -n $NAMESPACE -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || true)
+                            if [[ -z "$reason" ]]; then
+                                reason=$(kubectl get pod "$pod_name" -n $NAMESPACE -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' 2>/dev/null || echo "Unknown")
+                                message=$(kubectl get pod "$pod_name" -n $NAMESPACE -o jsonpath='{.status.containerStatuses[0].state.terminated.message}' 2>/dev/null || true)
+                            else
+                                message=$(kubectl get pod "$pod_name" -n $NAMESPACE -o jsonpath='{.status.containerStatuses[0].state.waiting.message}' 2>/dev/null || true)
+                            fi
+                            if [[ -n "$message" ]]; then
+                                print_status "FAIL" "Driver pod '$pod_name' phase=$phase reason=$reason: ${message:0:120}"
+                            else
+                                print_status "FAIL" "Driver pod '$pod_name' phase=$phase reason=$reason"
+                            fi
+                        fi
+                    done <<< "$driver_pods"
+                fi
+            }
+
+            # Invoke diagnostics for the known RayJob
+            check_ray_job "rayjob-recommendations-training"
     else
         print_status "FAIL" "KubeRay operator is not installed"
         ((failed_checks++))
@@ -246,6 +331,11 @@ main() {
     echo "📋 Summary:"
     if [[ $failed_checks -eq 0 ]]; then
         print_status "PASS" "All validation checks passed! The platform is ready for use."
+        if $RAY_DIAG; then
+            echo ""
+            echo "🔎 Running extended Ray diagnostics (--ray-diagnostics)"
+            bash "$SCRIPT_DIR/ray-diagnostics.sh" -n "$NAMESPACE" -j rayjob-recommendations-training || true
+        fi
         echo ""
         echo "🚀 Next steps:"
         echo "   - Access MinIO Console: kubectl port-forward svc/minio 9001:9001 -n $NAMESPACE"
@@ -255,6 +345,11 @@ main() {
         exit 0
     else
         print_status "FAIL" "$failed_checks validation checks failed. Please review the issues above."
+        if $RAY_DIAG; then
+            echo ""
+            echo "🔎 Running extended Ray diagnostics (--ray-diagnostics) despite failures"
+            bash "$SCRIPT_DIR/ray-diagnostics.sh" -n "$NAMESPACE" -j rayjob-recommendations-training || true
+        fi
         echo ""
         echo "🔧 Troubleshooting tips:"
         echo "   - Check pod logs: kubectl logs -l app=<service> -n $NAMESPACE"

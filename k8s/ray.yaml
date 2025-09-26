@@ -4,7 +4,8 @@ metadata:
   name: rayjob-recommendations-training
   namespace: ecommerce-platform
 spec:
-  shutdownAfterJobFinishes: true
+  # Keep the RayCluster alive after the job completes so it can be reused / inspected.
+  shutdownAfterJobFinishes: false
   entrypoint: python /apps/train_recommendation_model_k8s.py
   runtimeEnvYAML: |
     pip:
@@ -47,10 +48,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: "8Gi"
+                memory: "4Gi"
               requests:
                 cpu: "1"
-                memory: "4Gi"
+                memory: "2Gi"
           volumes:
           - name: training-script
             configMap:
@@ -79,10 +80,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: "6Gi"
+                memory: "2Gi"
               requests:
                 cpu: "1"
-                memory: "3Gi"
+                memory: "1Gi"
           volumes:
           - name: training-script
             configMap:
