@@ -16,9 +16,9 @@ NESSIE_URI = "http://nessie.ecommerce-platform.svc.cluster.local:19120/api/v1"
 WAREHOUSE_PATH = "s3a://warehouse"
 MINIO_ENDPOINT = "http://minio.ecommerce-platform.svc.cluster.local:9000"
 
-# Path inside the Flink container where the clickstream data will be mounted
-# For Kubernetes, we'll use sample data generation
-SOURCE_DATA_PATH = "/data"
+# Optional staged clickstream path (JSON lines) in MinIO via S3A exposed through catalog / direct filesystem
+STAGED_CLICKSTREAM_JSON = "s3a://warehouse/data/clickstream.json"
+USE_REAL_CLICKSTREAM = True  # attempt real data first
 
 def main():
     """
@@ -70,32 +70,72 @@ def main():
     print(f"Creating database '{DATABASE_NAME}' if it doesn't exist...")
     t_env.execute_sql(f"CREATE DATABASE IF NOT EXISTS {CATALOG_NAME}.{DATABASE_NAME}")
     
-    # 4. Create source table for clickstream events (sample data)
+    # 4. Create source table for clickstream events (real JSON if available, else datagen)
     # ===============================================================
-    print("Creating clickstream events source table...")
-    
-    # For Kubernetes demo, we'll create a datagen source
-    create_source_sql = f"""
-    CREATE TABLE clickstream_events (
-        user_id BIGINT,
-        product_id BIGINT,
-        event_type STRING,
-        timestamp_col TIMESTAMP(3),
-        session_id STRING,
-        WATERMARK FOR timestamp_col AS timestamp_col - INTERVAL '5' SECOND
-    ) WITH (
-        'connector' = 'datagen',
-        'rows-per-second' = '10',
-        'fields.user_id.min' = '1',
-        'fields.user_id.max' = '1000',
-        'fields.product_id.min' = '1',
-        'fields.product_id.max' = '100',
-        'fields.event_type.length' = '10'
-    )
-    """
-    
-    t_env.execute_sql(create_source_sql)
-    print("Clickstream events source table created.")
+    if USE_REAL_CLICKSTREAM:
+        print("Attempting to register real clickstream JSON source...")
+        # We'll try to create a filesystem connector table over the JSON file.
+        # If it fails, we fallback to datagen.
+        real_source_sql = f"""
+        CREATE TABLE clickstream_events (
+            user_id STRING,
+            product_id STRING,
+            event_type STRING,
+            timestamp_col TIMESTAMP(3),
+            WATERMARK FOR timestamp_col AS timestamp_col - INTERVAL '5' SECOND
+        ) WITH (
+            'connector' = 'filesystem',
+            'path' = '{STAGED_CLICKSTREAM_JSON}',
+            'format' = 'json'
+        )
+        """
+        try:
+            t_env.execute_sql(real_source_sql)
+            print("Registered filesystem JSON clickstream source.")
+        except Exception as e:
+            print(f"Real clickstream source registration failed ({e}); falling back to datagen source.")
+            fallback_sql = f"""
+            CREATE TABLE clickstream_events (
+                user_id BIGINT,
+                product_id BIGINT,
+                event_type STRING,
+                timestamp_col TIMESTAMP(3),
+                session_id STRING,
+                WATERMARK FOR timestamp_col AS timestamp_col - INTERVAL '5' SECOND
+            ) WITH (
+                'connector' = 'datagen',
+                'rows-per-second' = '10',
+                'fields.user_id.min' = '1',
+                'fields.user_id.max' = '1000',
+                'fields.product_id.min' = '1',
+                'fields.product_id.max' = '100',
+                'fields.event_type.length' = '10'
+            )
+            """
+            t_env.execute_sql(fallback_sql)
+            print("Datagen clickstream source table created.")
+    else:
+        print("Using datagen source (configured to skip real data).")
+        datagen_sql = f"""
+        CREATE TABLE clickstream_events (
+            user_id BIGINT,
+            product_id BIGINT,
+            event_type STRING,
+            timestamp_col TIMESTAMP(3),
+            session_id STRING,
+            WATERMARK FOR timestamp_col AS timestamp_col - INTERVAL '5' SECOND
+        ) WITH (
+            'connector' = 'datagen',
+            'rows-per-second' = '10',
+            'fields.user_id.min' = '1',
+            'fields.user_id.max' = '1000',
+            'fields.product_id.min' = '1',
+            'fields.product_id.max' = '100',
+            'fields.event_type.length' = '10'
+        )
+        """
+        t_env.execute_sql(datagen_sql)
+        print("Datagen clickstream source table created.")
 
     # 5. Create fraud detection logic
     # ===============================================================

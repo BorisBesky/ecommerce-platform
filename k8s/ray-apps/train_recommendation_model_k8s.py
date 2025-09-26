@@ -18,13 +18,14 @@ from botocore.config import Config
 RAY_ADDRESS = os.environ.get("RAY_ADDRESS")
 # NOTE: We are not reading from Iceberg in this version to simplify the training logic,
 # but the principle of loading data first remains the same.
-MINIO_ENDPOINT = "http://minio.ecommerce-platform.svc.cluster.local:9000"
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadmin"
-S3_BUCKET = "warehouse"
-OUTPUT_MODEL_KEY = "models/recommendation_model.pkl"
-# This assumes the 'data' directory is mounted at /data in the container.
-CLICKSTREAM_DATA_PATH = "/data/clickstream.json"  # container path; we'll fallback locally
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "http://minio.ecommerce-platform.svc.cluster.local:9000")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+S3_BUCKET = os.environ.get("CLICKSTREAM_S3_BUCKET", "warehouse")
+OUTPUT_MODEL_KEY = os.environ.get("MODEL_OUTPUT_KEY", "models/recommendation_model.pkl")
+# Preferred key for clickstream json inside the bucket (staged by submit-sample-jobs or data upload)
+CLICKSTREAM_S3_KEY = os.environ.get("CLICKSTREAM_S3_KEY", "data/clickstream.json")
+CLICKSTREAM_LOCAL_FALLBACK = "/data/clickstream.json"  # fallback local path
 
 # ------------------------
 # Simple FunkSVD (SGD) Recommender (pure NumPy)
@@ -177,24 +178,53 @@ def main():
         # large data files is complex in this setup
         print("Loading training data...")
         
-        # Try to load real data if available, otherwise generate sample data
+        # Strategy:
+        # 1. Attempt download from MinIO (preferred canonical location)
+        # 2. Fallback to local /data/clickstream.json
+        # 3. Fallback to repo relative data/clickstream-*.json
+        # 4. Generate synthetic sample data
+
         clickstream_df = None
-        data_path = CLICKSTREAM_DATA_PATH
-        
-        if os.path.exists(data_path):
-            print(f"Loading real clickstream data from {data_path}...")
-            clickstream_df = pd.read_json(data_path, lines=True)
-        else:
-            # Try to find local files relative to script location
+
+        # Attempt S3 (MinIO) download
+        s3_client = None
+        try:
+            import boto3
+            from botocore.config import Config as _BotoCfg
+            s3_client = boto3.client(
+                's3',
+                endpoint_url=MINIO_ENDPOINT,
+                aws_access_key_id=MINIO_ACCESS_KEY,
+                aws_secret_access_key=MINIO_SECRET_KEY,
+                config=_BotoCfg(signature_version='s3v4'),
+            )
+            print(f"Attempting to fetch s3://{S3_BUCKET}/{CLICKSTREAM_S3_KEY} from MinIO...")
+            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=CLICKSTREAM_S3_KEY)
+            clickstream_df = pd.read_json(obj['Body'], lines=True)
+            print(f"Loaded clickstream from MinIO: {len(clickstream_df)} records.")
+        except Exception as e:
+            print(f"MinIO fetch failed or unavailable ({e}). Trying local fallback...")
+
+        # Local fallback path
+        if clickstream_df is None and os.path.exists(CLICKSTREAM_LOCAL_FALLBACK):
+            try:
+                print(f"Loading local clickstream data from {CLICKSTREAM_LOCAL_FALLBACK}...")
+                clickstream_df = pd.read_json(CLICKSTREAM_LOCAL_FALLBACK, lines=True)
+            except Exception as e:
+                print(f"Local fallback load failed: {e}")
+
+        # Repo relative glob fallback
+        if clickstream_df is None:
             local_glob = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'clickstream-*.json'))
             files = sorted(glob.glob(local_glob))
-            
             if files:
-                print(f"Loading local clickstream files ({len(files)} found)...")
+                print(f"Loading repository clickstream files ({len(files)} found)...")
                 clickstream_df = pd.concat([pd.read_json(fp, lines=True) for fp in files], ignore_index=True)
-            else:
-                print("No real data found, generating sample data for demonstration...")
-                clickstream_df = generate_sample_data()
+
+        # Synthetic generation ultimate fallback
+        if clickstream_df is None:
+            print("No real clickstream data sources available; generating synthetic sample data...")
+            clickstream_df = generate_sample_data()
 
         print(f"Loaded {len(clickstream_df)} clickstream records.")
 
@@ -246,13 +276,16 @@ def main():
 
         model_bytes = pickle.dumps(trained_model)
 
-        s3_client = boto3.client(
-            's3',
-            endpoint_url=MINIO_ENDPOINT,
-            aws_access_key_id=MINIO_ACCESS_KEY,
-            aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version='s3v4'),
-        )
+        # Reuse s3_client if previously constructed; else construct now
+        if s3_client is None:
+            from botocore.config import Config as _BotoCfg
+            s3_client = boto3.client(
+                's3',
+                endpoint_url=MINIO_ENDPOINT,
+                aws_access_key_id=MINIO_ACCESS_KEY,
+                aws_secret_access_key=MINIO_SECRET_KEY,
+                config=_BotoCfg(signature_version='s3v4'),
+            )
 
         try:
             s3_client.put_object(

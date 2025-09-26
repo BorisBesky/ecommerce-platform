@@ -8,9 +8,10 @@ NESSIE_URI = "http://nessie.ecommerce-platform.svc.cluster.local:19120/api/v1"
 WAREHOUSE_PATH = "s3a://warehouse" # 'warehouse' is the bucket name in MinIO
 MINIO_ENDPOINT = "http://minio.ecommerce-platform.svc.cluster.local:9000"
 
-# Input data paths within the container
-USERS_DATA_PATH = "/data/users.csv"
-PRODUCTS_DATA_PATH = "/data/products.csv"
+# Input data paths now point directly to MinIO (uploaded by submit-sample-jobs.sh)
+# These files are staged in the 'warehouse' bucket under data/ by the job submission script.
+USERS_DATA_PATH = "s3a://warehouse/data/users.csv"
+PRODUCTS_DATA_PATH = "s3a://warehouse/data/products.csv"
 
 def main():
     """

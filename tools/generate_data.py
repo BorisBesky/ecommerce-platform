@@ -5,6 +5,7 @@ import os
 import random
 import uuid
 from datetime import datetime, timedelta
+import shutil
 
 # --- Sample Data ---
 FIRST_NAMES = ['John', 'Jane', 'Peter', 'Mary', 'Chris', 'Pat', 'Alex', 'Sam', 'Taylor', 'Jordan']
@@ -120,6 +121,9 @@ def main():
     parser.add_argument('--num-events', 
                        type=int, default=NUM_EVENTS,  # Reference the global
                        help=f'Number of clickstream events to generate (default: {NUM_EVENTS})')
+    parser.add_argument('--seed',
+                       type=int, default=None,
+                       help='Random seed for reproducible generation (default: random)')
     
     args = parser.parse_args()
     
@@ -127,6 +131,16 @@ def main():
     NUM_PRODUCTS = args.num_products
     NUM_EVENTS = args.num_events
     OUTPUT_DIR = args.output_dir
+
+    # Apply seed if provided
+    if args.seed is not None:
+        random.seed(args.seed)
+        try:
+            import numpy as _np
+            _np.random.seed(args.seed)
+        except Exception:
+            pass
+        print(f"Using random seed: {args.seed}")
     
     # Create the output directory if it doesn't exist
     if not os.path.exists(OUTPUT_DIR):
@@ -135,7 +149,9 @@ def main():
 
     users_file = os.path.join(OUTPUT_DIR, 'users.csv')
     products_file = os.path.join(OUTPUT_DIR, 'products.csv')
-    clickstream_file = os.path.join(OUTPUT_DIR, 'clickstream-' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S') +  '.json')
+    timestamp_part = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    clickstream_file = os.path.join(OUTPUT_DIR, f'clickstream-{timestamp_part}.json')
+    stable_clickstream_alias = os.path.join(OUTPUT_DIR, 'clickstream.json')
 
     user_ids = []
     product_ids = []
@@ -169,6 +185,12 @@ def main():
                 product_ids = generate_products(products_file)
         
         generate_clickstream(clickstream_file, user_ids, product_ids)
+        # Maintain a stable alias file for downstream jobs expecting clickstream.json
+        try:
+            shutil.copyfile(clickstream_file, stable_clickstream_alias)
+            print(f"Created stable alias file: {stable_clickstream_alias}")
+        except Exception as e:
+            print(f"Warning: Could not create stable alias file '{stable_clickstream_alias}': {e}")
 
     print(f"\nMock data generation complete for: {args.data_type}")
 

@@ -68,35 +68,62 @@ EOF
 
 echo "   ✅ Sample data files created"
 
-# Step 2: Upload data to a pod for processing
+# Step 2: Stage sample data in MinIO (warehouse bucket)
 echo ""
-echo "📤 Step 2: Uploading sample data..."
+echo "📤 Step 2: Staging sample data to MinIO..."
 
-# Create a data uploader pod
-kubectl run data-uploader -n $NAMESPACE --image=busybox --rm -i --restart=Never -- sh -c "
-mkdir -p /data
-cat > /data/users.csv << 'EOF'
+# We'll create a short-lived pod with the MinIO client (mc) to upload the local heredoc data.
+# Data layout target:
+#   s3a://warehouse/data/users.csv
+#   s3a://warehouse/data/products.csv
+
+MINIO_ALIAS="local"
+MINIO_ENDPOINT_INTERNAL="http://minio:9000"   # in-cluster service
+MINIO_ACCESS_KEY="minioadmin"
+MINIO_SECRET_KEY="minioadmin"
+WAREHOUSE_BUCKET="warehouse"
+
+# Create a Kubernetes ConfigMap on-the-fly for the two CSV files (simpler than inline cat inside pod) OR pipe directly.
+# Simpler approach: pipe via stdin into pod and upload with mc.
+
+kubectl run data-uploader -n $NAMESPACE --image=minio/mc:latest --restart=Never --rm -i -- bash -lc "
+set -e
+echo '🔧 Configuring mc client...'
+mc alias set $MINIO_ALIAS $MINIO_ENDPOINT_INTERNAL $MINIO_ACCESS_KEY $MINIO_SECRET_KEY >/dev/null
+
+echo '🪣 Ensuring bucket exists...'
+if ! mc ls $MINIO_ALIAS/$WAREHOUSE_BUCKET >/dev/null 2>&1; then
+    mc mb $MINIO_ALIAS/$WAREHOUSE_BUCKET || true
+fi
+
+echo '⬆️  Uploading users.csv...'
+cat > /tmp/users.csv <<'USERS'
 user_id,name,email,signup_date,is_fraud
 1,John Doe,john@example.com,2023-01-15,false
 2,Jane Smith,jane@example.com,2023-02-20,false
 3,Bob Wilson,bob@example.com,2023-03-10,false
 4,Alice Brown,alice@example.com,2023-04-05,true
 5,Charlie Davis,charlie@example.com,2023-05-12,false
-EOF
+USERS
+mc cp /tmp/users.csv $MINIO_ALIAS/$WAREHOUSE_BUCKET/data/users.csv
 
-cat > /data/products.csv << 'EOF'
+echo '⬆️  Uploading products.csv...'
+cat > /tmp/products.csv <<'PRODS'
 product_id,name,category,price
 1,Laptop,Electronics,999.99
 2,Smartphone,Electronics,599.99
 3,Headphones,Electronics,199.99
 4,Book,Books,29.99
 5,Shoes,Clothing,89.99
-EOF
+PRODS
+mc cp /tmp/products.csv $MINIO_ALIAS/$WAREHOUSE_BUCKET/data/products.csv
 
-echo 'Sample data prepared'
+echo '📄 Listing uploaded objects:'
+mc ls $MINIO_ALIAS/$WAREHOUSE_BUCKET/data/
+echo '✅ Data staged to MinIO.'
 "
 
-echo "   ✅ Sample data uploaded"
+echo "   ✅ Sample data staged in MinIO (s3a://warehouse/data/)"
 
 # Step 3: Submit Spark ETL Job
 echo ""
@@ -138,16 +165,36 @@ else
     echo "   ❌ Flink JobManager pod not found"
 fi
 
-# Step 5: Submit Ray Training Job
+# Step 5: Submit Ray Training Job (prefer existing cluster)
 echo ""
 echo "🧠 Step 5: Submitting Ray Training Job..."
 
-# Apply the Ray job
-kubectl apply -f "${SCRIPT_DIR}/ray.yaml"
+USE_EXISTING_RAY=${USE_EXISTING_RAY:-true}
 
-wait_for_job "ray" "rayjob-recommendations-training" 600
+if [[ "$USE_EXISTING_RAY" == "true" ]]; then
+    RAY_HEAD_POD=$(kubectl get pods -n $NAMESPACE -l app=ray,component=head -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    if [[ -n "$RAY_HEAD_POD" ]]; then
+        echo "   🔍 Detected existing Ray head pod: $RAY_HEAD_POD"
+        echo "   🚀 Submitting training script to existing cluster (exec into head pod)"
+        # Execute the training script inside the head pod. Assumes /apps mount with script exists.
+        if kubectl exec -n $NAMESPACE "$RAY_HEAD_POD" -- test -f /apps/train_recommendation_model_k8s.py; then
+            kubectl exec -n $NAMESPACE "$RAY_HEAD_POD" -- bash -lc "python /apps/train_recommendation_model_k8s.py"
+            echo "   ✅ Ray training script executed on existing cluster"
+        else
+            echo "   ⚠️  Training script not found at /apps/train_recommendation_model_k8s.py in existing cluster. Falling back to RayJob submission."
+            RAY_HEAD_POD="" # force fallback
+        fi
+    else
+        echo "   ℹ️  No existing Ray head pod detected. Will submit RayJob manifest."
+    fi
+fi
 
-echo "   ✅ Ray training job submitted"
+if [[ -z "$RAY_HEAD_POD" ]]; then
+    echo "   📄 Applying RayJob manifest: ${SCRIPT_DIR}/ray.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/ray.yaml"
+    wait_for_job "ray" "rayjob-recommendations-training" 600
+    echo "   ✅ Ray training RayJob submitted (new or reused job controller)"
+fi
 
 echo ""
 echo "📊 Step 6: Checking job statuses..."
