@@ -77,3 +77,7 @@ minio-portforward: ## Port-forward MinIO console (9001) & API (9000)
 spark-portforward: ## Port-forward Spark master UI (8080) & worker UI (8081)
 	kubectl port-forward svc/spark-master -n $(K8S_NAMESPACE) 8080:8080
 	kubectl port-forward svc/spark-worker -n $(K8S_NAMESPACE) 8081:8081
+
+flink-portforward: ## Port-forward Flink JobManager UI (8081)
+	kubectl port-forward svc/flink-jobmanager -n $(K8S_NAMESPACE) 8082:8081
+
