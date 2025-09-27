@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
       - name: flink-jobmanager
-        image: flink:1.18-scala_2.12
+        image: ghcr.io/borisbesky/ecommerce-platform/flink:v2.0
         args: ["jobmanager"]
         env:
         - name: AWS_REGION
@@ -164,7 +164,7 @@ spec:
     spec:
       containers:
       - name: flink-taskmanager
-        image: flink:1.18-scala_2.12
+        image: ghcr.io/borisbesky/ecommerce-platform/flink:v2.0
         args: ["taskmanager"]
         env:
         - name: AWS_REGION
