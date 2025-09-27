@@ -42,6 +42,25 @@ def main():
 
     print("Flink streaming environment initialized for Kubernetes deployment.")
 
+    # Configure S3A settings for MinIO
+    # ===============================================================
+    cfg.set_string("fs.s3a.endpoint", MINIO_ENDPOINT)
+    cfg.set_string("fs.s3a.access.key", "minioadmin")
+    cfg.set_string("fs.s3a.secret.key", "minioadmin")
+    cfg.set_string("fs.s3a.path.style.access", "true")
+    cfg.set_string("fs.s3a.ssl.enabled", "false")
+    cfg.set_string("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+    
+    # Also set via table environment configuration
+    t_env.get_config().set("fs.s3a.endpoint", MINIO_ENDPOINT)
+    t_env.get_config().set("fs.s3a.access.key", "minioadmin")
+    t_env.get_config().set("fs.s3a.secret.key", "minioadmin")
+    t_env.get_config().set("fs.s3a.path.style.access", "true")
+    t_env.get_config().set("fs.s3a.ssl.enabled", "false")
+    t_env.get_config().set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+    
+    print("S3A configuration set for MinIO.")
+
     # 2. Create the Nessie Iceberg Catalog
     # ===============================================================
     # This registers our Nessie catalog so Flink knows how to interact with it.
@@ -54,10 +73,12 @@ def main():
         'ref'='main',
         'authentication.type'='none',
         'warehouse'='{WAREHOUSE_PATH}',
+        'io-impl'='org.apache.iceberg.aws.s3.S3FileIO',
         's3.endpoint'='{MINIO_ENDPOINT}',
+        's3.path-style-access'='true',
         's3.access-key-id'='minioadmin',
         's3.secret-access-key'='minioadmin',
-        's3.path-style-access'='true'
+        's3.region'='us-east-1'
     )
     """
     
@@ -168,18 +189,10 @@ def main():
     CREATE TABLE IF NOT EXISTS {CATALOG_NAME}.{DATABASE_NAME}.fraud_alerts (
         user_id BIGINT,
         event_type STRING,
-        event_count BIGINT,
-        window_start TIMESTAMP(3),
-        window_end TIMESTAMP(3),
-        alert_timestamp TIMESTAMP(3)
-    ) WITH (
-        'connector' = 'iceberg',
-        'catalog-name' = '{CATALOG_NAME}',
-        'warehouse' = '{WAREHOUSE_PATH}',
-        's3.endpoint' = '{MINIO_ENDPOINT}',
-        's3.access-key-id' = 'minioadmin',
-        's3.secret-access-key' = 'minioadmin',
-        's3.path-style-access' = 'true'
+        event_count BIGINT NOT NULL,
+        window_start TIMESTAMP(3) NOT NULL,
+        window_end TIMESTAMP(3) NOT NULL,
+        alert_timestamp TIMESTAMP_LTZ(3) NOT NULL
     )
     """
     
@@ -194,7 +207,7 @@ def main():
     insert_sql = f"""
     INSERT INTO {CATALOG_NAME}.{DATABASE_NAME}.fraud_alerts
     SELECT 
-        user_id,
+        CAST(user_id AS BIGINT) as user_id,
         event_type,
         event_count,
         window_start,
