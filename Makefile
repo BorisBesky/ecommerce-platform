@@ -81,3 +81,10 @@ spark-portforward: ## Port-forward Spark master UI (8080) & worker UI (8081)
 flink-portforward: ## Port-forward Flink JobManager UI (8081)
 	kubectl port-forward svc/flink-jobmanager -n $(K8S_NAMESPACE) 8082:8081
 
+all-portforward: ## Port-forward all UIs: MinIO (9000,9001), Spark (8080,8081), Flink (8082)
+	$(MAKE) minio-portforward & \
+	$(MAKE) spark-portforward & \
+	$(MAKE) flink-portforward & \
+	$(MAKE) ray-portforward & \
+	wait
+

@@ -17,7 +17,7 @@ WAREHOUSE_PATH = "s3a://warehouse"
 MINIO_ENDPOINT = "http://minio.ecommerce-platform.svc.cluster.local:9000"
 
 # Optional staged clickstream path (JSON lines) in MinIO via S3A exposed through catalog / direct filesystem
-STAGED_CLICKSTREAM_JSON = "s3a://warehouse/data/clickstream.json"
+STAGED_CLICKSTREAM_JSON = "s3a://warehouse/data/clickstream/clickstream.json"
 USE_REAL_CLICKSTREAM = True  # attempt real data first
 
 def main():
