@@ -221,8 +221,8 @@ def main():
     print("Fraud detection pipeline started successfully.")
     
     # Wait for the job to run (in a real scenario, this would run indefinitely)
-    print("Streaming job is running. Check Flink UI for progress.")
-    result.wait()
+    # print("Streaming job is running. Check Flink UI for progress.")
+    # result.wait()
 
 if __name__ == "__main__":
     main()

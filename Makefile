@@ -19,6 +19,7 @@ data-generate: ## Generate users, products, and clickstream (stable alias create
 MINIO_ENDPOINT ?= http://localhost:9000
 MINIO_ACCESS_KEY ?= minioadmin
 MINIO_SECRET_KEY ?= minioadmin
+NESSIE_ENDPOINT ?= http://localhost:19120/api/v1
 
 upload-data: ## Upload generated users, products, clickstream using Python uploader
 	$(PYTHON) tools/upload-data-to-minio.py \
@@ -34,23 +35,25 @@ submit-sample-jobs: ## Run the unified job submission script (Spark, Flink, Ray)
 	bash k8s/submit-sample-jobs.sh
 
 spark-etl: ## Run only Spark ETL part (requires data uploaded)
-	kubectl run spark-job-submitter -n $(K8S_NAMESPACE) --image=bitnami/spark:3.5.0 --rm -i --restart=Never -- \
-	  spark-submit \
-	  --master spark://spark-master:7077 \
-	  --deploy-mode client \
+	SPARK_MASTER_POD=$$(kubectl get pods -l app=spark,component=master -n $(K8S_NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
+	if [ -n "$$SPARK_MASTER_POD" ]; then \
+	  kubectl exec $$SPARK_MASTER_POD -n $(K8S_NAMESPACE) -- spark-submit --master local \
 	  --conf spark.sql.catalog.nessie=org.apache.iceberg.spark.SparkCatalog \
-	  --conf spark.sql.catalog.nessie.uri=http://nessie:19120/api/v1 \
+	  --conf spark.sql.catalog.nessie.uri=${NESSIE_ENDPOINT} \
 	  --conf spark.sql.catalog.nessie.ref=main \
 	  --conf spark.sql.catalog.nessie.authentication.type=NONE \
 	  --conf spark.sql.catalog.nessie.catalog-impl=org.apache.iceberg.nessie.NessieCatalog \
 	  --conf spark.sql.catalog.nessie.warehouse=s3a://warehouse \
 	  --conf spark.sql.extensions="org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions" \
-	  --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-	  --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-	  --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
+	  --conf spark.hadoop.fs.s3a.endpoint=${MINIO_ENDPOINT} \
+	  --conf spark.hadoop.fs.s3a.access.key=${MINIO_ACCESS_KEY} \
+	  --conf spark.hadoop.fs.s3a.secret.key=${MINIO_SECRET_KEY} \
 	  --conf spark.hadoop.fs.s3a.path.style.access=true \
 	  --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
-	  /apps/batch_etl_k8s.py
+	  /apps/batch_etl_k8s.py \
+	else \
+	  echo "Spark Master pod not found"; exit 1; \
+	fi
 
 flink-run: ## Submit Flink streaming job only
 	FLINK_JOBMANAGER_POD=$$(kubectl get pods -l app=flink,component=jobmanager -n $(K8S_NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
