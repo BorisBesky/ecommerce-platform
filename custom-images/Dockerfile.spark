@@ -1,0 +1,63 @@
+FROM openjdk:11-jre-slim
+
+# Install Python, pip, and procps (provides ps command required by Spark daemon scripts)
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    wget \
+    curl \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and install Spark
+ENV SPARK_VERSION=3.5.6
+ENV HADOOP_VERSION=3
+ENV SPARK_HOME=/opt/spark
+ENV PATH=$PATH:$SPARK_HOME/bin
+
+RUN wget -q https://downloads.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+    && tar -xzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+    && mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} /opt/spark \
+    && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
+
+# Set up environment variables
+ENV JAVA_HOME=/usr/local/openjdk-11
+ENV SPARK_HOME=/opt/spark
+ENV PATH=$PATH:$SPARK_HOME/bin
+
+# Create directories for logs
+RUN mkdir -p /opt/spark/logs
+
+# Set permissions
+RUN chmod -R 755 /opt/spark
+
+# Create entrypoint script to handle both master and worker modes
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+if [ "$SPARK_MODE" = "master" ]; then\n\
+  echo "Starting Spark Master..."\n\
+  exec /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master \\\n\
+    --host ${SPARK_MASTER_HOST:-0.0.0.0} \\\n\
+    --port ${SPARK_MASTER_PORT:-7077} \\\n\
+    --webui-port ${SPARK_MASTER_WEBUI_PORT:-8080}\n\
+elif [ "$SPARK_MODE" = "worker" ]; then\n\
+  echo "Starting Spark Worker..."\n\
+  exec /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker \\\n\
+    ${SPARK_MASTER_URL} \\\n\
+    --cores ${SPARK_WORKER_CORES:-1} \\\n\
+    --memory ${SPARK_WORKER_MEMORY:-1g} \\\n\
+    --webui-port ${SPARK_WORKER_WEBUI_PORT:-8081}\n\
+else\n\
+  echo "Error: SPARK_MODE must be set to either '\''master'\'' or '\''worker'\''"\n\
+  exit 1\n\
+fi' > /opt/spark/entrypoint.sh && chmod +x /opt/spark/entrypoint.sh
+
+# Set the working directory
+WORKDIR /opt/spark
+
+# Expose ports
+EXPOSE 7077 8080 8081
+
+# Use the entrypoint script
+ENTRYPOINT ["/opt/spark/entrypoint.sh"] 

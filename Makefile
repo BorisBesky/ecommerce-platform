@@ -6,12 +6,32 @@ CLICKSTREAM_BUCKET ?= warehouse
 CLICKSTREAM_KEY ?= data/clickstream.json
 SEED ?= 42
 
-.PHONY: help data-generate upload-data submit-sample-jobs ray-train flink-run spark-etl ray-portforward minio-portforward
+.PHONY: help build-images push-images-local push-images-ghcr deploy-all data-generate upload-data submit-sample-jobs ray-train flink-run spark-etl ray-portforward minio-portforward
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 DATA_OUT_DIR ?= data
+
+build-images:
+	docker build -f custom-images/Dockerfile.spark -t custom-spark .
+	docker build -f custom-images/Dockerfile.flink -t custom-flink .
+
+push-images-local:
+	docker tag custom-spark localhost:5001/custom-spark:latest
+	docker push localhost:5001/custom-spark:latest
+	docker tag custom-flink localhost:5001/custom-flink:latest
+	docker push localhost:5001/custom-flink:latest
+
+push-images-ghcr:
+	docker tag custom-spark ghcr.io/borisbesky/ecommerce-platform/spark:latest
+	docker push ghcr.io/borisbesky/ecommerce-platform/spark:latest
+	docker tag custom-flink ghcr.io/borisbesky/ecommerce-platform/flink:latest
+	docker push ghcr.io/borisbesky/ecommerce-platform/flink:latest
+
+
+deploy-all: ## Deploy all components using Helm charts
+	k8s/deploy-all.sh $(K8S_NAMESPACE) $(CLICKSTREAM_BUCKET)
 
 data-generate: ## Generate users, products, and clickstream (stable alias created)
 	$(PYTHON) tools/generate_data.py all --seed $(SEED) --output-dir $(DATA_OUT_DIR)
