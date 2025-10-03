@@ -81,6 +81,8 @@ spec:
           value: "minioadmin"
         - name: AWS_SECRET_ACCESS_KEY
           value: "minioadmin"
+        - name: JAVA_TOOL_OPTIONS
+          value: "-Dnessie.client.http.compression.enabled=false"
         - name: FLINK_PROPERTIES
           value: |-
             jobmanager.rpc.address: flink-jobmanager
@@ -179,10 +181,13 @@ spec:
           value: "minioadmin"
         - name: AWS_SECRET_ACCESS_KEY
           value: "minioadmin"
+        - name: JAVA_TOOL_OPTIONS
+          value: "-Dnessie.client.http.compression.enabled=false"
         - name: FLINK_PROPERTIES
           value: |-
             jobmanager.rpc.address: flink-jobmanager
             jobmanager.rpc.port: 6123
+            blob.server.port: 6124
             taskmanager.rpc.port: 6122
             data.port: 6121
             taskmanager.numberOfTaskSlots: 2

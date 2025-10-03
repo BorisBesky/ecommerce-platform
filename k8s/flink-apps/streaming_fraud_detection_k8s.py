@@ -78,7 +78,8 @@ def main():
         's3.path-style-access'='true',
         's3.access-key-id'='minioadmin',
         's3.secret-access-key'='minioadmin',
-        's3.region'='us-east-1'
+        's3.region'='us-east-1',
+        'nessie.client.http.compression.enabled'='false'
     )
     """
     
@@ -108,7 +109,9 @@ def main():
         product_id STRING,
         event_type STRING,
         `timestamp` STRING,
-        event_time AS TO_TIMESTAMP(`timestamp`),
+        event_time AS TO_TIMESTAMP(
+            SUBSTRING(REPLACE(`timestamp`, 'T', ' '), 1, 23)
+        ),
         WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND
     ) WITH (
         'connector' = 'filesystem',
@@ -140,6 +143,7 @@ def main():
         TUMBLE_END(event_time, INTERVAL '10' SECOND) as window_end,
         COUNT(*) as event_count
     FROM default_catalog.default_database.clickstream_events
+    WHERE event_time IS NOT NULL
     GROUP BY 
         TUMBLE(event_time, INTERVAL '10' SECOND),
         user_id
