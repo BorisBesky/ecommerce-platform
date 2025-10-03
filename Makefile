@@ -51,6 +51,16 @@ upload-data: ## Upload generated users, products, clickstream using Python uploa
 	  --prefix data \
 	  --include users products clickstream
 
+upload-clickstream: ## Upload generated users, products, clickstream using Python uploader
+	$(PYTHON) tools/upload-data-to-minio.py \
+	  --endpoint $(MINIO_ENDPOINT) \
+	  --access-key $(MINIO_ACCESS_KEY) \
+	  --secret-key $(MINIO_SECRET_KEY) \
+	  --bucket $(CLICKSTREAM_BUCKET) \
+	  --data-dir $(DATA_OUT_DIR) \
+	  --prefix data \
+	  --include clickstream
+
 submit-sample-jobs: ## Run the unified job submission script (Spark, Flink, Ray)
 	bash k8s/submit-sample-jobs.sh
 

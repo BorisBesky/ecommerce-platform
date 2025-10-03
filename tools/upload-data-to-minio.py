@@ -33,11 +33,23 @@ def parse_args():
     parser.add_argument("--data-dir", default="data", help="Local data directory containing generated files")
     parser.add_argument("--include", nargs="+", choices=["users", "products", "clickstream"], default=["users", "products", "clickstream"], help="Which artifact groups to upload")
     parser.add_argument("--skip-individual", action="store_true", help="Skip uploading individual clickstream-*.json files (only alias)")
+    parser.add_argument("--skip-merged", action="store_true", help="Skip uploading merged clickstream.json alias file (only individual files)")
+    parser.add_argument("--upload-file-name", default=None, help="If set, upload only this specific clickstream file instead of all matching clickstream-*.json files")
     parser.add_argument("--prefix", default="data", help="Root prefix inside bucket (default: data)")
     return parser.parse_args()
 
 class UploaderConfig:
-    def __init__(self, endpoint: str, access_key: str, secret_key: str, bucket: str, data_dir: Path, include: List[str], prefix: str, skip_individual: bool):
+    def __init__(self, endpoint: str, access_key: str, secret_key: str, bucket: str, data_dir: Path, include: List[str], prefix: str, skip_individual: bool, skip_merged: bool, upload_file_name: str):
+        self.endpoint = endpoint
+        self.access_key = access_key
+        self.secret_key = secret_key
+        self.bucket = bucket
+        self.data_dir = data_dir
+        self.include = include
+        self.prefix = prefix.rstrip('/')
+        self.skip_individual = skip_individual
+        self.skip_merged = skip_merged
+        self.upload_file_name = upload_file_name
         self.endpoint = endpoint
         self.access_key = access_key
         self.secret_key = secret_key
@@ -130,7 +142,10 @@ def upload_artifacts(cfg: UploaderConfig) -> bool:
     # Clickstream
     if "clickstream" in cfg.include:
         individual_dir_key_root = f"{cfg.prefix}/clickstream/individual".rstrip('/') + '/'
-        files = sorted(glob.glob(str(data_dir / "clickstream-*.json")))
+        if cfg.upload_file_name:
+            files = [data_dir / cfg.upload_file_name]
+        else:
+            files = sorted(glob.glob(str(data_dir / "clickstream-*.json")))
         merged_file = data_dir / "clickstream.json"
 
         if not files and not merged_file.exists():
@@ -143,13 +158,14 @@ def upload_artifacts(cfg: UploaderConfig) -> bool:
                     key = f"{individual_dir_key_root}{filename}"
                     if upload_file_to_minio(s3_client, fp, cfg.bucket, key):
                         success_count += 1
-            if merged_file.exists():
-                alias_key = f"{cfg.prefix}/clickstream/clickstream.json"
-                if upload_file_to_minio(s3_client, str(merged_file), cfg.bucket, alias_key):
-                    success_count += 1
-                    print(f"✅ Stable alias uploaded: s3://{cfg.bucket}/{alias_key}")
-            else:
-                print("⚠️ Stable clickstream.json not found")
+            if not cfg.skip_merged:
+                if merged_file.exists():
+                    alias_key = f"{cfg.prefix}/clickstream/clickstream.json"
+                    if upload_file_to_minio(s3_client, str(merged_file), cfg.bucket, alias_key):
+                        success_count += 1
+                        print(f"✅ Stable alias uploaded: s3://{cfg.bucket}/{alias_key}")
+                else:
+                    print("⚠️ Stable clickstream.json not found")
 
     # Summary
     print("\n📊 Upload Summary")
@@ -188,6 +204,8 @@ def main():
         include=args.include,
         prefix=args.prefix,
         skip_individual=args.skip_individual,
+        upload_file_name=args.upload_file_name,
+        skip_merged=args.skip_merged,
     )
     return upload_artifacts(cfg)
 
