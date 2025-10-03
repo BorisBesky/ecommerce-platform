@@ -27,6 +27,9 @@ spec:
     - name: web-ui
       port: 8081
       targetPort: 8081
+    - name: blob
+      port: 6124
+      targetPort: 6124
   type: ClusterIP
 ---
 apiVersion: v1
@@ -82,6 +85,7 @@ spec:
           value: |-
             jobmanager.rpc.address: flink-jobmanager
             jobmanager.rpc.port: 6123
+            blob.server.port: 6124
             taskmanager.rpc.port: 6122
             data.port: 6121
             taskmanager.numberOfTaskSlots: 2
@@ -103,6 +107,8 @@ spec:
           name: rpc
         - containerPort: 8081
           name: web-ui
+        - containerPort: 6124
+          name: blob
         volumeMounts:
         - name: flink-config
           mountPath: /opt/flink/conf/log4j-console.properties

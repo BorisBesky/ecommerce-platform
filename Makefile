@@ -58,6 +58,7 @@ spark-etl: ## Run only Spark ETL part (requires data uploaded)
 	SPARK_MASTER_POD=$$(kubectl get pods -l app=spark,component=master -n $(K8S_NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
 	if [ -n "$$SPARK_MASTER_POD" ]; then \
 	  kubectl exec $$SPARK_MASTER_POD -n $(K8S_NAMESPACE) -- spark-submit --master local \
+	  --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.3,org.projectnessie.nessie-integrations:nessie-spark-extensions-3.5_2.12:0.77.1,org.apache.hadoop:hadoop-aws:3.3.4 \
 	  --conf spark.sql.catalog.nessie=org.apache.iceberg.spark.SparkCatalog \
 	  --conf spark.sql.catalog.nessie.uri=${NESSIE_ENDPOINT} \
 	  --conf spark.sql.catalog.nessie.ref=main \

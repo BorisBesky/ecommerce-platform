@@ -37,14 +37,17 @@ def main():
         'ref'='main',
         'authentication.type'='none',
         'warehouse'='{WAREHOUSE_PATH}',
+        'io-impl'='org.apache.iceberg.aws.s3.S3FileIO',
         's3.endpoint'='{MINIO_ENDPOINT}',
+        's3.path-style-access'='true',
         's3.access-key-id'='minioadmin',
         's3.secret-access-key'='minioadmin',
-        's3.path-style-access'='true'
+        's3.region'='us-east-1'
     )
     """
     
     print("Creating Nessie catalog...")
+    print(create_catalog_sql)
     t_env.execute_sql(create_catalog_sql)
     print("Nessie catalog created successfully.")
 

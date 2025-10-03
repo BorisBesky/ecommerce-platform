@@ -8,10 +8,32 @@ set -e
 echo "🚀 E-commerce Platform - Complete Kubernetes Deployment"
 echo "========================================================"
 
+print_usage() {
+    echo "Usage: $0 [overlay]"
+    echo ""
+    echo "Overlays:"
+    echo "  local   - Use local registry (localhost:5001)"
+    echo "  ghcr    - Use GitHub Container Registry (ghcr.io/borisbesky) [default]"
+    echo ""
+    echo "Examples:"
+    echo "  $0                    # Deploy with ghcr overlay"
+    echo "  $0 local              # Deploy with local overlay"
+    echo ""
+    echo "Make sure to build and push images to the selected registry before deploying."
+}
+
+case "$1" in
+    -h|--help|help)
+        print_usage
+        exit 0
+        ;;
+esac
+
 # Configuration
 NAMESPACE="ecommerce-platform"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 K8S_DIR="${SCRIPT_DIR}/../k8s"
+OVERLAY="${1:-ghcr}"  # Default overlay is 'ghcr'
 
 # Check if kubectl is available
 if ! command -v kubectl &> /dev/null; then
@@ -92,14 +114,14 @@ echo "   ✅ ConfigMaps created"
 # Step 5: Deploy Spark Cluster
 echo ""
 echo "⚡ Step 5: Deploying Spark cluster..."
-kubectl apply -f "${K8S_DIR}/spark.yaml"
+kubectl apply -f "${K8S_DIR}/overlays/${OVERLAY}/spark.yaml"
 wait_for_deployment "spark-master" $NAMESPACE
 wait_for_deployment "spark-worker" $NAMESPACE
 
 # Step 6: Deploy Flink Cluster
 echo ""
 echo "🌊 Step 6: Deploying Flink cluster..."
-kubectl apply -f "${K8S_DIR}/flink.yaml"
+kubectl apply -f "${K8S_DIR}/overlays/${OVERLAY}/flink.yaml"
 wait_for_deployment "flink-jobmanager" $NAMESPACE
 wait_for_deployment "flink-taskmanager" $NAMESPACE
 

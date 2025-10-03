@@ -4,6 +4,8 @@ set -e
 # Parse command line arguments
 EXECUTE_SQL=""
 NAMESPACE="ecommerce-platform"
+CATALOG="nessie"
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     -e)
@@ -14,9 +16,13 @@ while [[ $# -gt 0 ]]; do
       NAMESPACE="$2"
       shift 2
       ;;
+    -c|--catalog)
+      CATALOG="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option $1"
-      echo "Usage: $0 [-e 'SQL statement'] [-n namespace]"
+      echo "Usage: $0 [-e 'SQL statement'] [-n namespace] [-c catalog]"
       exit 1
       ;;
   esac
