@@ -110,35 +110,6 @@ class FunkSVD:
         rmse = math.sqrt(float(np.mean(errs))) if n else float('nan')
         return rmse, n
 
-def generate_sample_data(n_users=1000, n_items=500, n_interactions=10000):
-    """Generate sample clickstream data for training."""
-    print(f"Generating sample data: {n_users} users, {n_items} items, {n_interactions} interactions...")
-    
-    rng = np.random.default_rng(42)
-    
-    # Generate user and item IDs
-    user_ids = [f"user_{i:06d}" for i in range(n_users)]
-    product_ids = [f"product_{i:06d}" for i in range(n_items)]
-    
-    event_types = ['view', 'add_to_cart', 'purchase', 'payment_failed']
-    event_weights = [0.7, 0.2, 0.08, 0.02]  # Probabilities for each event type
-    
-    # Generate interactions
-    data = []
-    for _ in range(n_interactions):
-        user_id = rng.choice(user_ids)
-        product_id = rng.choice(product_ids)
-        event_type = rng.choice(event_types, p=event_weights)
-        
-        data.append({
-            'timestamp': '2025-08-19T12:00:00Z',  # Fixed timestamp for simplicity
-            'user_id': user_id,
-            'product_id': product_id,
-            'event_type': event_type
-        })
-    
-    return pd.DataFrame(data)
-
 def main():
     """
     Main Ray application to train a collaborative filtering recommendation model
@@ -173,60 +144,25 @@ def main():
             print("Ray initialized successfully.")
 
         # 2. Load and Prepare Data for Training
-        # =================================================================
-        # For this Kubernetes deployment, we'll use sample data since mounting 
-        # large data files is complex in this setup
+
         print("Loading training data...")
-        
-        # Strategy:
-        # 1. Attempt download from MinIO (preferred canonical location)
-        # 2. Fallback to local /data/clickstream.json
-        # 3. Fallback to repo relative data/clickstream-*.json
-        # 4. Generate synthetic sample data
 
         clickstream_df = None
 
-        # Attempt S3 (MinIO) download
-        s3_client = None
-        try:
-            import boto3
-            from botocore.config import Config as _BotoCfg
-            s3_client = boto3.client(
-                's3',
-                endpoint_url=MINIO_ENDPOINT,
-                aws_access_key_id=MINIO_ACCESS_KEY,
-                aws_secret_access_key=MINIO_SECRET_KEY,
-                config=_BotoCfg(signature_version='s3v4'),
-            )
-            print(f"Attempting to fetch s3://{S3_BUCKET}/{CLICKSTREAM_S3_KEY} from MinIO...")
-            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=CLICKSTREAM_S3_KEY)
-            clickstream_df = pd.read_json(obj['Body'], lines=True)
-            print(f"Loaded clickstream from MinIO: {len(clickstream_df)} records.")
-        except Exception as e:
-            print(f"MinIO fetch failed or unavailable ({e}). Trying local fallback...")
-
-        # Local fallback path
-        if clickstream_df is None and os.path.exists(CLICKSTREAM_LOCAL_FALLBACK):
-            try:
-                print(f"Loading local clickstream data from {CLICKSTREAM_LOCAL_FALLBACK}...")
-                clickstream_df = pd.read_json(CLICKSTREAM_LOCAL_FALLBACK, lines=True)
-            except Exception as e:
-                print(f"Local fallback load failed: {e}")
-
-        # Repo relative glob fallback
-        if clickstream_df is None:
-            local_glob = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'clickstream-*.json'))
-            files = sorted(glob.glob(local_glob))
-            if files:
-                print(f"Loading repository clickstream files ({len(files)} found)...")
-                clickstream_df = pd.concat([pd.read_json(fp, lines=True) for fp in files], ignore_index=True)
-
-        # Synthetic generation ultimate fallback
-        if clickstream_df is None:
-            print("No real clickstream data sources available; generating synthetic sample data...")
-            clickstream_df = generate_sample_data()
-
-        print(f"Loaded {len(clickstream_df)} clickstream records.")
+        # S3 (MinIO) download
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=MINIO_ENDPOINT,
+            aws_access_key_id=MINIO_ACCESS_KEY,
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            config=_BotoCfg(signature_version='s3v4'),
+        )
+        print(f"Attempting to fetch s3://{S3_BUCKET}/{CLICKSTREAM_S3_KEY} from MinIO...")
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=CLICKSTREAM_S3_KEY)
+        clickstream_df = pd.read_json(obj['Body'], lines=True)
+        print(f"Loaded clickstream from MinIO: {len(clickstream_df)} records.")
+        if clickstream_df.empty:
+            raise ValueError("Clickstream data is empty after loading from S3.")
 
         # --- Feature Engineering: Create user-item "ratings" ---
         event_weights = {
@@ -276,32 +212,11 @@ def main():
 
         model_bytes = pickle.dumps(trained_model)
 
-        # Reuse s3_client if previously constructed; else construct now
-        if s3_client is None:
-            from botocore.config import Config as _BotoCfg
-            s3_client = boto3.client(
-                's3',
-                endpoint_url=MINIO_ENDPOINT,
-                aws_access_key_id=MINIO_ACCESS_KEY,
-                aws_secret_access_key=MINIO_SECRET_KEY,
-                config=_BotoCfg(signature_version='s3v4'),
-            )
-
-        try:
-            s3_client.put_object(
-                Bucket=S3_BUCKET,
-                Key=OUTPUT_MODEL_KEY,
-                Body=model_bytes,
-            )
-            print("Model artifact saved successfully to MinIO.")
-        except Exception as s3e:
-            # Fallback to local save
-            local_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'models'))
-            os.makedirs(local_dir, exist_ok=True)
-            local_path = os.path.join(local_dir, 'recommendation_model.pkl')
-            with open(local_path, 'wb') as f:
-                f.write(model_bytes)
-            print(f"S3 save failed ({s3e}); saved locally to {local_path}.")
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=OUTPUT_MODEL_KEY,
+            Body=model_bytes,
+        )
 
         print("\n🎉 Training job completed successfully!")
 

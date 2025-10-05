@@ -61,9 +61,6 @@ upload-clickstream: ## Upload generated users, products, clickstream using Pytho
 	  --prefix data \
 	  --include clickstream
 
-submit-sample-jobs: ## Run the unified job submission script (Spark, Flink, Ray)
-	bash k8s/submit-sample-jobs.sh
-
 spark-etl: ## Run only Spark ETL part (requires data uploaded)
 	SPARK_MASTER_POD=$$(kubectl get pods -l app=spark,component=master -n $(K8S_NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
 	if [ -n "$$SPARK_MASTER_POD" ]; then \
