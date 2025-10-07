@@ -6,6 +6,7 @@ import random
 import uuid
 from datetime import datetime, timedelta
 import shutil
+import numpy as np
 
 # --- Sample Data ---
 FIRST_NAMES = ['John', 'Jane', 'Peter', 'Mary', 'Chris', 'Pat', 'Alex', 'Sam', 'Taylor', 'Jordan']
@@ -17,39 +18,74 @@ EVENT_TYPES = ['view', 'view', 'view', 'view', 'add_to_cart', 'add_to_cart', 'pu
 
 
 def generate_users(file_path):
-    """Generates a CSV file with mock user data."""
+    """Generates a CSV file with mock user data with 10-dimensional feature vectors."""
     user_ids = []
+    user_features = {}
     with open(file_path, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['user_id', 'name', 'signup_date'])
+        writer.writerow(['user_id', 'name', 'signup_date', 'features'])
         for _ in range(NUM_USERS):
             user_id = str(uuid.uuid4())
             user_ids.append(user_id)
             name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
             signup_date = (datetime.now() - timedelta(days=random.randint(1, 365))).strftime('%Y-%m-%d')
-            writer.writerow([user_id, name, signup_date])
+            # Generate 10-dimensional feature vector (normalized)
+            features = np.random.randn(10)
+            features = features / np.linalg.norm(features)  # Normalize to unit vector
+            user_features[user_id] = features
+            # Store as JSON string
+            features_str = json.dumps(features.tolist())
+            writer.writerow([user_id, name, signup_date, features_str])
     print(f"Successfully generated {NUM_USERS} users in '{file_path}'")
-    return user_ids
+    return user_ids, user_features
 
 def generate_products(file_path):
-    """Generates a CSV file with mock product data."""
+    """Generates a CSV file with mock product data with 10-dimensional feature vectors."""
     product_ids = []
+    product_features = {}
     with open(file_path, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['product_id', 'product_name', 'category', 'price'])
+        writer.writerow(['product_id', 'product_name', 'category', 'price', 'features'])
         for _ in range(NUM_PRODUCTS):
             product_id = str(uuid.uuid4())
             product_ids.append(product_id)
             product_name = f"{random.choice(PRODUCT_ADJECTIVES)} {random.choice(PRODUCT_NOUNS)}"
             category = random.choice(CATEGORIES)
             price = round(random.uniform(10.0, 500.0), 2)
-            writer.writerow([product_id, product_name, category, price])
+            # Generate 10-dimensional feature vector (normalized)
+            features = np.random.randn(10)
+            features = features / np.linalg.norm(features)  # Normalize to unit vector
+            product_features[product_id] = features
+            # Store as JSON string
+            features_str = json.dumps(features.tolist())
+            writer.writerow([product_id, product_name, category, price, features_str])
     print(f"Successfully generated {NUM_PRODUCTS} products in '{file_path}'")
-    return product_ids
+    return product_ids, product_features
 
-def generate_clickstream(file_path, user_ids, product_ids):
+def select_product_by_affinity(user_id, user_features, product_ids, product_features, temperature=2.0):
     """
-    Generates a JSON file with mock clickstream data.
+    Select a product based on affinity between user and product feature vectors.
+    Uses softmax with temperature to convert dot products into probabilities.
+    
+    Higher temperature = more random, lower temperature = more deterministic
+    """
+    user_vec = user_features[user_id]
+    
+    # Compute affinity scores (dot product since vectors are normalized)
+    affinities = np.array([np.dot(user_vec, product_features[pid]) for pid in product_ids])
+    
+    # Apply softmax with temperature
+    exp_affinities = np.exp(affinities / temperature)
+    probabilities = exp_affinities / np.sum(exp_affinities)
+    
+    # Sample product based on probabilities
+    selected_product = np.random.choice(product_ids, p=probabilities)
+    return selected_product
+
+
+def generate_clickstream(file_path, user_ids, product_ids, user_features, product_features):
+    """
+    Generates a JSON file with mock clickstream data based on user-product affinity.
     Each line in the file is a separate JSON object.
     """
     start_time = datetime.now() - timedelta(hours=24)
@@ -58,10 +94,13 @@ def generate_clickstream(file_path, user_ids, product_ids):
         # --- Normal Activity ---
         for i in range(NUM_EVENTS):
             event_time = start_time + timedelta(seconds=i * 5) # Events every 5 seconds
+            user_id = random.choice(user_ids)
+            # Select product based on affinity with user
+            product_id = select_product_by_affinity(user_id, user_features, product_ids, product_features)
             event = {
                 'timestamp': event_time.isoformat(),
-                'user_id': random.choice(user_ids),
-                'product_id': random.choice(product_ids),
+                'user_id': user_id,
+                'product_id': product_id,
                 'event_type': random.choice(EVENT_TYPES)
             }
             f.write(json.dumps(event) + '\n')
@@ -76,20 +115,23 @@ def generate_clickstream(file_path, user_ids, product_ids):
             # Generate 15 rapid-fire events for each fraudster within a 10-second window
             for i in range(15):
                 event_time = fraud_start_time + timedelta(milliseconds=i * 500) # Fast clicks
+                # Fraud uses affinity-based selection too
+                product_id = select_product_by_affinity(user, user_features, product_ids, product_features)
                 event = {
                     'timestamp': event_time.isoformat(),
                     'user_id': user,
-                    'product_id': random.choice(product_ids),
+                    'product_id': product_id,
                     'event_type': 'view' # Rapid views are a common fraud pattern
                 }
                 f.write(json.dumps(event) + '\n')
             # Add a couple of failed payments for good measure
             for i in range(2):
                  event_time = fraud_start_time + timedelta(milliseconds=i * 600)
+                 product_id = select_product_by_affinity(user, user_features, product_ids, product_features)
                  event = {
                     'timestamp': event_time.isoformat(),
                     'user_id': user,
-                    'product_id': random.choice(product_ids),
+                    'product_id': product_id,
                     'event_type': 'payment_failed'
                 }
                  f.write(json.dumps(event) + '\n')
@@ -155,36 +197,42 @@ def main():
 
     user_ids = []
     product_ids = []
+    user_features = {}
+    product_features = {}
 
     if args.data_type in ['users', 'all']:
-        user_ids = generate_users(users_file)
+        user_ids, user_features = generate_users(users_file)
     
     if args.data_type in ['products', 'all']:
-        product_ids = generate_products(products_file)
+        product_ids, product_features = generate_products(products_file)
     
     if args.data_type in ['clickstream', 'all']:
-        # For clickstream generation, we need user and product IDs
+        # For clickstream generation, we need user and product IDs with features
         if not user_ids:
-            # Load existing user IDs if they weren't just generated
+            # Load existing user IDs and features if they weren't just generated
             if os.path.exists(users_file):
                 with open(users_file, 'r') as f:
                     reader = csv.DictReader(f)
-                    user_ids = [row['user_id'] for row in reader]
+                    for row in reader:
+                        user_ids.append(row['user_id'])
+                        user_features[row['user_id']] = np.array(json.loads(row['features']))
             else:
                 print("Warning: No users file found. Generating users first...")
-                user_ids = generate_users(users_file)
+                user_ids, user_features = generate_users(users_file)
         
         if not product_ids:
-            # Load existing product IDs if they weren't just generated
+            # Load existing product IDs and features if they weren't just generated
             if os.path.exists(products_file):
                 with open(products_file, 'r') as f:
                     reader = csv.DictReader(f)
-                    product_ids = [row['product_id'] for row in reader]
+                    for row in reader:
+                        product_ids.append(row['product_id'])
+                        product_features[row['product_id']] = np.array(json.loads(row['features']))
             else:
                 print("Warning: No products file found. Generating products first...")
-                product_ids = generate_products(products_file)
+                product_ids, product_features = generate_products(products_file)
         
-        generate_clickstream(clickstream_file, user_ids, product_ids)
+        generate_clickstream(clickstream_file, user_ids, product_ids, user_features, product_features)
         # Maintain a stable alias file for downstream jobs expecting clickstream.json
         try:
             shutil.copyfile(clickstream_file, stable_clickstream_alias)
