@@ -2,5 +2,6 @@ numpy<2
 pandas
 s3fs
 boto3
+pyarrow  # Required for Ray Data with S3/MinIO
 # Pin Ray to match the base image version to avoid client/runtime mismatch
 ray[train]==2.46.0

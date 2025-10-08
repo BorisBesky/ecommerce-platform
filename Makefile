@@ -119,3 +119,11 @@ all-portforward: ## Port-forward all UIs: MinIO (9000,9001), Spark (8080,8081), 
 	$(MAKE) ray-portforward & \
 	wait
 
+ray-serve-portforward: ## Port-forward Ray Serve UI (8000)
+	kubectl port-forward svc/recommendation-service-serve-svc -n $(K8S_NAMESPACE) 8083:8000
+
+ray-serve-portforward: ## Port-forward Ray Serve UI (8000)
+	kubectl port-forward svc/recommendation-service-serve-svc -n $(K8S_NAMESPACE) 8084:8000
+
+ray-get-recommendations: ## Get recommendations from Ray Serve
+	kubectl exec -n $(K8S_NAMESPACE) $(kubectl get pods -n $(K8S_NAMESPACE) -l app=ray,component=serve-head -o jsonpath='{.items[0].metadata.name}') -- bash -lc "curl -X POST http://localhost:8000/recommend -H 'Content-Type: application/json' -d '{\"user_id\": \"1\", \"n\": 5, \"exclude_products\": [\"prod1\", \"prod2\"]}'"

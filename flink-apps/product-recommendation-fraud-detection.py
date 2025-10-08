@@ -1,5 +1,7 @@
 import os
 import random
+import requests
+import json
 from pyflink.table import (
     DataTypes,
     StreamTableEnvironment,
@@ -19,18 +21,64 @@ NESSIE_URI = "http://nessie:19120/api/v1"
 WAREHOUSE_PATH = "s3a://warehouse"
 MINIO_ENDPOINT = "http://minio:9000"
 SOURCE_DATA_PATH = "/data"
+# Ray Serve endpoint for recommendations
+RAY_SERVE_ENDPOINT = os.environ.get(
+    "RAY_SERVE_ENDPOINT",
+    "http://recommendation-service-serve-svc.ecommerce-platform.svc.cluster.local:8000"
+)
 
-# --- Mock Recommendation Logic ---
-# In a real system, this function would make an HTTP request to a Ray Serve endpoint.
-# Here, we simulate it by returning random recommendations.
-@udtf(result_types=[DataTypes.STRING(), DataTypes.STRING()])
+# --- Real Recommendation Logic via Ray Serve ---
+@udtf(result_types=[DataTypes.STRING(), DataTypes.DOUBLE()])
 def get_recommendations(user_id: str, product_id: str):
-    # Simulate a call to a recommendation service, e.g., requests.get(...)
-    # For this example, we just generate a few mock recommendations.
-    print(f"Simulating recommendation call for user '{user_id}' based on product '{product_id}'")
-    for i in range(3):
-        # The result is a tuple (or list) of the output columns
-        yield "rec_" + str(i + 1), "product-recommendation-" + str(random.randint(100, 999))
+    """
+    Call Ray Serve endpoint to get real recommendations for a user.
+    
+    Args:
+        user_id: The user to get recommendations for
+        product_id: The product they're currently viewing (used for exclusion)
+    
+    Yields:
+        Tuples of (recommended_product_id, score)
+    """
+    try:
+        # Call Ray Serve endpoint
+        url = f"{RAY_SERVE_ENDPOINT}/recommend"
+        payload = {
+            "user_id": user_id,
+            "n": 5,  # Get top 5 recommendations
+            "exclude_products": [product_id]  # Exclude current product
+        }
+        
+        response = requests.post(
+            url,
+            json=payload,
+            timeout=2.0  # 2 second timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            
+            # Check for errors in response
+            if "error" in result:
+                print(f"Error from recommendation service: {result['error']}")
+                # Return empty - no recommendations
+                return
+            
+            # Yield each recommendation
+            recommendations = result.get("recommendations", [])
+            for rec in recommendations:
+                yield rec["product_id"], rec["score"]
+        else:
+            print(f"Recommendation service returned status {response.status_code}")
+            # Return empty - service unavailable
+            return
+            
+    except requests.exceptions.Timeout:
+        print(f"Timeout calling recommendation service for user {user_id}")
+        return
+    except Exception as e:
+        print(f"Error getting recommendations for user {user_id}: {e}")
+        return
 
 def main():
     """
@@ -123,7 +171,7 @@ def main():
         print("Table 'fraud_attempts' created successfully.")
 
 
-    # --- 1. Fraud Detection Sink (Unchanged) ---
+    # --- 1. Fraud Detection Sink  ---
     fraud_attempts = (
         source_table.window(Tumble.over(lit(10).seconds).on(col("event_time")).alias("w"))
         .group_by(col("w"), col("user_id"))
@@ -141,8 +189,8 @@ def main():
     fraud_attempts.execute_insert("fraud_attempts")
 
     # --- 2. Real-Time Recommendation Sink (New) ---
-    # For simplicity, let's skip the anti-join and just process all events for recommendations
-    # In a real scenario, you might want to implement fraud filtering differently
+    # Process all events for recommendations
+    # In a real scenario, we might want to implement fraud filtering differently
     
     # Use the UDTF to generate recommendations for each event
     # The LATERAL TABLE join allows us to call the function for each row.

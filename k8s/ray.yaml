@@ -13,6 +13,7 @@ spec:
       - pandas
       - boto3
       - s3fs
+      - pyarrow
     env_vars:
       RAY_ADDRESS: "auto"
       MINIO_ENDPOINT: "http://minio:9000"
@@ -48,10 +49,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: "4Gi"
+                memory: "8Gi"
               requests:
                 cpu: "1"
-                memory: "2Gi"
+                memory: "4Gi"
           volumes:
           - name: training-script
             configMap:
@@ -80,10 +81,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: "2Gi"
+                memory: "4Gi"
               requests:
                 cpu: "1"
-                memory: "1Gi"
+                memory: "2Gi"
           volumes:
           - name: training-script
             configMap:

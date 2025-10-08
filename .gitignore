@@ -7,12 +7,7 @@ spark-apps/.venv/
 __pycache__/
 k8s/**/__pycache__/
 
-data/clickstream2.json
-data/clickstream-*.json
-data/minio/
-
-# Legacy deployment files (moved to legacy/)
-legacy/
+data/
 
 # Temporary files
 tmp/
