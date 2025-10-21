@@ -2,7 +2,7 @@
 
 A comprehensive e-commerce analytics platform built with modern cloud-native technologies, deployed on Kubernetes. This platform provides real-time fraud detection, batch ETL processing, and machine learning capabilities for recommendation systems.
 
-## 🏗️ Architecture
+## Architecture
 
 The platform consists of the following components:
 
@@ -13,7 +13,7 @@ The platform consists of the following components:
 - **Ray**: Distributed machine learning and AI workloads
 - **Apache Iceberg**: Open table format for analytics
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -107,7 +107,7 @@ kubectl port-forward svc/flink-jobmanager 8081:8081 -n ecommerce-platform
 # Open http://localhost:8081
 ```
 
-## 📊 Platform Components
+## Platform Components
 
 ### Data Storage Layer
 
@@ -142,7 +142,7 @@ kubectl port-forward svc/flink-jobmanager 8081:8081 -n ecommerce-platform
 - **Use Cases**: Distributed ML training, hyperparameter tuning
 - **Applications**: Recommendation model training
 
-## 🛠️ Development Guide
+## Development Guide
 
 ### Project Structure
 
@@ -240,7 +240,7 @@ Services use Kubernetes DNS for discovery:
 - `spark-master.ecommerce-platform.svc.cluster.local`
 - `flink-jobmanager.ecommerce-platform.svc.cluster.local`
 
-## 🧪 Testing
+## Testing
 
 ### Validation Tests
 
@@ -305,7 +305,7 @@ kubectl logs -l app=spark,component=master -n ecommerce-platform
 kubectl logs -l app=flink,component=jobmanager -n ecommerce-platform
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -377,7 +377,7 @@ Scale Ray workers in `k8s/ray.yaml`:
 - Increase worker resources for large ML workloads
 - Configure `rayStartParams` for specific use cases
 
-## 🔐 Security Considerations
+## Security Considerations
 
 ### Network Security
 
@@ -408,7 +408,7 @@ For production deployments:
 - Iceberg tables support column-level encryption
 - Use network policies to restrict pod-to-pod communication
 
-## 🚀 Production Deployment
+## Production Deployment
 
 ### Resource Requirements
 
@@ -450,7 +450,7 @@ Configure auto-scaling:
 2. **Vertical Pod Autoscaler** for resource optimization
 3. **Cluster autoscaler** for node scaling
 
-## 🧹 Cleanup
+## Cleanup
 
 To remove the entire platform:
 
@@ -462,7 +462,7 @@ To remove the entire platform:
 helm uninstall kuberay-operator
 ```
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -474,7 +474,7 @@ helm uninstall kuberay-operator
 
 This project is licensed under the MIT License. See LICENSE file for details.
 
-## 🆘 Support
+## Support
 
 For issues and questions:
 
@@ -486,13 +486,9 @@ For issues and questions:
    - Resource constraints
    - Steps to reproduce
 
-## 🗺️ Roadmap
+## Roadmap
 
 Future enhancements:
 
 - [ ] **Multi-tenancy** support with namespaces
 - [ ] **CI/CD pipelines** for application deployment
-- [ ] **Data lineage** tracking with Apache Atlas
-- [ ] **Advanced security** with service mesh (Istio)
-- [ ] **Cost optimization** with resource policies
-- [ ] **Disaster recovery** with cross-region replication
