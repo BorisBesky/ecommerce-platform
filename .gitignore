@@ -1,5 +1,6 @@
 .venv/
 .DS_Store
+.vscode/
 spark-apps/.venv/
 .env.local
 .env

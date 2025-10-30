@@ -6,28 +6,35 @@ CLICKSTREAM_BUCKET ?= warehouse
 CLICKSTREAM_KEY ?= data/clickstream.json
 SEED ?= 42
 
-.PHONY: help build-images push-images-local push-images-ghcr deploy-all data-generate upload-data submit-sample-jobs ray-train flink-run spark-etl ray-portforward minio-portforward
+.PHONY: help build-images push-images-local push-images-ghcr deploy-all data-generate upload-data upload-clickstream spark-etl flink-run ray-train ray-portforward minio-portforward spark-portforward flink-portforward all-portforward ray-serve-portforward ray-get-recommendations
 
 help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
+	@awk -F':.*?##' '/^[a-zA-Z_-]+:.*?##/ {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 DATA_OUT_DIR ?= data
 
-build-images:
+build-images: ## Build custom Docker images for Spark and Flink with required JARs
+	flink-jars/download-jars.sh
 	docker build -f custom-images/Dockerfile.spark -t custom-spark .
 	docker build -f custom-images/Dockerfile.flink -t custom-flink .
 
-push-images-local:
-	docker tag custom-spark localhost:5001/custom-spark:latest
-	docker push localhost:5001/custom-spark:latest
-	docker tag custom-flink localhost:5001/custom-flink:latest
-	docker push localhost:5001/custom-flink:latest
+push-images-cluster: ## Push custom Docker images to local registry
+	docker tag custom-spark registry.local/custom-spark:latest
+	docker push registry.local/custom-spark:latest
+	docker tag custom-flink registry.local/custom-flink:latest
+	docker push registry.local/custom-flink:latest
 
-push-images-ghcr:
-	docker tag custom-spark ghcr.io/borisbesky/ecommerce-platform/spark:latest
-	docker push ghcr.io/borisbesky/ecommerce-platform/spark:latest
-	docker tag custom-flink ghcr.io/borisbesky/ecommerce-platform/flink:latest
-	docker push ghcr.io/borisbesky/ecommerce-platform/flink:latest
+push-images-local: ## Push custom Docker images to local registry
+	docker tag custom-spark localhost:5000/custom-spark:latest
+	docker push localhost:5000/custom-spark:latest
+	docker tag custom-flink localhost:5000/custom-flink:latest
+	docker push localhost:5000/custom-flink:latest	
+
+push-images-ghcr: ## Push custom Docker images to GitHub Container Registry
+	docker tag custom-spark ghcr.io/borisbesky/custom-spark:latest
+	docker push ghcr.io/borisbesky/custom-spark:latest
+	docker tag custom-flink ghcr.io/borisbesky/custom-flink:latest
+	docker push ghcr.io/borisbesky/custom-flink:latest
 
 
 deploy-all: ## Deploy all components using Helm charts
@@ -121,9 +128,6 @@ all-portforward: ## Port-forward all UIs: MinIO (9000,9001), Spark (8080,8081), 
 
 ray-serve-portforward: ## Port-forward Ray Serve UI (8000)
 	kubectl port-forward svc/recommendation-service-serve-svc -n $(K8S_NAMESPACE) 8083:8000
-
-ray-serve-portforward: ## Port-forward Ray Serve UI (8000)
-	kubectl port-forward svc/recommendation-service-serve-svc -n $(K8S_NAMESPACE) 8084:8000
 
 ray-get-recommendations: ## Get recommendations from Ray Serve
 	kubectl exec -n $(K8S_NAMESPACE) $(kubectl get pods -n $(K8S_NAMESPACE) -l app=ray,component=serve-head -o jsonpath='{.items[0].metadata.name}') -- bash -lc "curl -X POST http://localhost:8000/recommend -H 'Content-Type: application/json' -d '{\"user_id\": \"1\", \"n\": 5, \"exclude_products\": [\"prod1\", \"prod2\"]}'"

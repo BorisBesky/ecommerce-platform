@@ -1,4 +1,6 @@
 #!/bin/bash
+shopt -s expand_aliases
+source ~/.bash_aliases
 
 # Prerequisites Check Script
 # This script verifies that all prerequisites are met before deploying the platform
