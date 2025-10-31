@@ -9,8 +9,8 @@ resources:
 # Override images to use local registry
 images:
   - name: localhost:5001/custom-flink
-    newName: 10.152.183.69:5000/custom-flink
+    newName: localhost:32000/custom-flink
     newTag: latest
   - name: localhost:5001/custom-spark
-    newName: 10.152.183.69:5000/custom-spark
+    newName: localhost:32000/custom-spark
     newTag: latest

@@ -1,4 +1,7 @@
 #!/bin/bash
+shopt -s expand_aliases
+source ~/.bash_aliases
+
 
 # Complete Kubernetes Deployment Script for E-commerce Platform
 # This script deploys all services (MinIO, Nessie, Spark, Flink, Ray) to Kubernetes
