@@ -107,7 +107,12 @@ ray-train: ## Execute Ray training script on existing cluster head (requires hea
 	fi
 
 ray-portforward: ## Port-forward Ray dashboard (default 8265)
-	kubectl port-forward svc/rayjob-recommendations-training-head-svc -n $(K8S_NAMESPACE) 8265:8265
+	RAY_HEAD_POD=$$(kubectl get pods -n $(K8S_NAMESPACE) -l app=ray,component=head -o jsonpath='{.items[0].metadata.name}'); \
+	if [ -n "$$RAY_HEAD_POD" ]; then \
+	  kubectl port-forward -n $(K8S_NAMESPACE) $$RAY_HEAD_POD 8265:8265 \
+	else \
+	  echo "Ray head pod not found"; exit 1; \
+	fi
 
 minio-portforward: ## Port-forward MinIO console (9001) & API (9000)
 	kubectl port-forward svc/minio -n $(K8S_NAMESPACE) 9000:9000 9001:9001

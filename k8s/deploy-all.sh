@@ -109,6 +109,7 @@ kubectl create configmap flink-apps \
 # Create Ray training script ConfigMap
 kubectl create configmap ray-training-script \
     --from-file="${K8S_DIR}/ray-apps/train_recommendation_model_k8s.py" \
+    --from-file="${K8S_DIR}/ray-apps/train_prio_aware_recommendation_model.py" \
     -n $NAMESPACE \
     --dry-run=client -o yaml | kubectl apply -f -
 

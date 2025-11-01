@@ -18,7 +18,7 @@ EVENT_TYPES = ['view', 'view', 'view', 'view', 'add_to_cart', 'add_to_cart', 'pu
 
 
 def generate_users(file_path):
-    """Generates a CSV file with mock user data with 10-dimensional feature vectors."""
+    """Generates a CSV file with mock user data with 20-dimensional feature vectors."""
     user_ids = []
     user_features = {}
     with open(file_path, 'w', newline='') as f:
@@ -29,8 +29,8 @@ def generate_users(file_path):
             user_ids.append(user_id)
             name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
             signup_date = (datetime.now() - timedelta(days=random.randint(1, 365))).strftime('%Y-%m-%d')
-            # Generate 10-dimensional feature vector (normalized)
-            features = np.random.randn(10)
+            # Generate 20-dimensional feature vector (normalized)
+            features = np.random.randn(20)
             features = features / np.linalg.norm(features)  # Normalize to unit vector
             user_features[user_id] = features
             # Store as JSON string
@@ -40,7 +40,7 @@ def generate_users(file_path):
     return user_ids, user_features
 
 def generate_products(file_path):
-    """Generates a CSV file with mock product data with 10-dimensional feature vectors."""
+    """Generates a CSV file with mock product data with 20-dimensional feature vectors."""
     product_ids = []
     product_features = {}
     with open(file_path, 'w', newline='') as f:
@@ -52,8 +52,8 @@ def generate_products(file_path):
             product_name = f"{random.choice(PRODUCT_ADJECTIVES)} {random.choice(PRODUCT_NOUNS)}"
             category = random.choice(CATEGORIES)
             price = round(random.uniform(10.0, 500.0), 2)
-            # Generate 10-dimensional feature vector (normalized)
-            features = np.random.randn(10)
+            # Generate 20-dimensional feature vector (normalized)
+            features = np.random.randn(20)
             features = features / np.linalg.norm(features)  # Normalize to unit vector
             product_features[product_id] = features
             # Store as JSON string
@@ -62,17 +62,31 @@ def generate_products(file_path):
     print(f"Successfully generated {NUM_PRODUCTS} products in '{file_path}'")
     return product_ids, product_features
 
-def select_product_by_affinity(user_id, user_features, product_ids, product_features, temperature=2.0):
+def select_product_by_affinity(user_id, user_features, product_ids, product_features, temperature=2.0, context_product_id=None, context_weight=0.7):
     """
     Select a product based on affinity between user and product feature vectors.
     Uses softmax with temperature to convert dot products into probabilities.
     
+    If context_product_id is provided, blends user affinity with product-to-product similarity
+    to create browsing patterns where users explore similar products.
+    
     Higher temperature = more random, lower temperature = more deterministic
+    context_weight controls how much the previous product influences the next selection (0.0-1.0)
     """
     user_vec = user_features[user_id]
     
-    # Compute affinity scores (dot product since vectors are normalized)
-    affinities = np.array([np.dot(user_vec, product_features[pid]) for pid in product_ids])
+    if context_product_id is not None and context_product_id in product_features:
+        context_vec = product_features[context_product_id]
+        # Blend user preferences with product similarity
+        # This creates sequential affinity - browsing similar products
+        affinities = np.array([
+            context_weight * np.dot(context_vec, product_features[pid]) + 
+            (1 - context_weight) * np.dot(user_vec, product_features[pid])
+            for pid in product_ids
+        ])
+    else:
+        # No context, use only user affinity
+        affinities = np.array([np.dot(user_vec, product_features[pid]) for pid in product_ids])
     
     # Apply softmax with temperature
     exp_affinities = np.exp(affinities / temperature)
@@ -86,22 +100,48 @@ def select_product_by_affinity(user_id, user_features, product_ids, product_feat
 def generate_clickstream(file_path, user_ids, product_ids, user_features, product_features):
     """
     Generates a JSON file with mock clickstream data based on user-product affinity.
+    Creates realistic browsing patterns where users explore similar products sequentially.
     Each line in the file is a separate JSON object.
     """
     start_time = datetime.now() - timedelta(hours=24)
+    
+    # Track the last product each user interacted with for sequential affinity
+    user_last_product = {}
 
     with open(file_path, 'w') as f:
-        # --- Normal Activity ---
+        # --- Normal Activity with Sequential Affinity ---
         for i in range(NUM_EVENTS):
             event_time = start_time + timedelta(seconds=i * 5) # Events every 5 seconds
             user_id = random.choice(user_ids)
-            # Select product based on affinity with user
-            product_id = select_product_by_affinity(user_id, user_features, product_ids, product_features)
+            
+            # Get context from user's last product interaction
+            last_product = user_last_product.get(user_id)
+            
+            # 80% of the time, use context-aware selection to create browsing patterns
+            # 20% of the time, start fresh exploration based only on user preferences
+            if last_product is not None and random.random() < 0.8:
+                product_id = select_product_by_affinity(
+                    user_id, user_features, product_ids, product_features,
+                    context_product_id=last_product,
+                    context_weight=0.7  # 70% influenced by previous product, 30% by user preference
+                )
+            else:
+                # Fresh exploration - no context
+                product_id = select_product_by_affinity(
+                    user_id, user_features, product_ids, product_features
+                )
+            
+            event_type = random.choice(EVENT_TYPES)
+            
+            # Update last product for view, add_to_cart, and purchase events
+            if event_type in ['view', 'add_to_cart', 'purchase']:
+                user_last_product[user_id] = product_id
+            
             event = {
                 'timestamp': event_time.isoformat(),
                 'user_id': user_id,
                 'product_id': product_id,
-                'event_type': random.choice(EVENT_TYPES)
+                'event_type': event_type
             }
             f.write(json.dumps(event) + '\n')
 
@@ -113,10 +153,22 @@ def generate_clickstream(file_path, user_ids, product_ids, user_features, produc
 
         for user in fraud_users:
             # Generate 15 rapid-fire events for each fraudster within a 10-second window
+            fraud_context_product = None
             for i in range(15):
                 event_time = fraud_start_time + timedelta(milliseconds=i * 500) # Fast clicks
-                # Fraud uses affinity-based selection too
-                product_id = select_product_by_affinity(user, user_features, product_ids, product_features)
+                
+                # Fraudsters also show some sequential affinity (but with rapid timing)
+                if fraud_context_product is not None and random.random() < 0.6:
+                    product_id = select_product_by_affinity(
+                        user, user_features, product_ids, product_features,
+                        context_product_id=fraud_context_product,
+                        context_weight=0.5
+                    )
+                else:
+                    product_id = select_product_by_affinity(user, user_features, product_ids, product_features)
+                
+                fraud_context_product = product_id
+                
                 event = {
                     'timestamp': event_time.isoformat(),
                     'user_id': user,
@@ -124,20 +176,21 @@ def generate_clickstream(file_path, user_ids, product_ids, user_features, produc
                     'event_type': 'view' # Rapid views are a common fraud pattern
                 }
                 f.write(json.dumps(event) + '\n')
+            
             # Add a couple of failed payments for good measure
             for i in range(2):
-                 event_time = fraud_start_time + timedelta(milliseconds=i * 600)
-                 product_id = select_product_by_affinity(user, user_features, product_ids, product_features)
-                 event = {
+                event_time = fraud_start_time + timedelta(milliseconds=i * 600)
+                product_id = select_product_by_affinity(user, user_features, product_ids, product_features)
+                event = {
                     'timestamp': event_time.isoformat(),
                     'user_id': user,
                     'product_id': product_id,
                     'event_type': 'payment_failed'
                 }
-                 f.write(json.dumps(event) + '\n')
-
+                f.write(json.dumps(event) + '\n')
 
     print(f"Successfully generated {NUM_EVENTS}+ events in '{file_path}'")
+
 
 
 def main():
@@ -152,16 +205,16 @@ def main():
                        choices=['users', 'products', 'clickstream', 'all'],
                        help='Type of data to generate: users, products, clickstream, or all')
     parser.add_argument('--output-dir', '-o', 
-                       default=OUTPUT_DIR,  # Now we can reference the global
+                       default=OUTPUT_DIR,
                        help=f'Output directory (default: {OUTPUT_DIR})')
     parser.add_argument('--num-users', 
-                       type=int, default=NUM_USERS,  # Reference the global
+                       type=int, default=NUM_USERS,
                        help=f'Number of users to generate (default: {NUM_USERS})')
     parser.add_argument('--num-products', 
-                       type=int, default=NUM_PRODUCTS,  # Reference the global
+                       type=int, default=NUM_PRODUCTS,
                        help=f'Number of products to generate (default: {NUM_PRODUCTS})')
     parser.add_argument('--num-events', 
-                       type=int, default=NUM_EVENTS,  # Reference the global
+                       type=int, default=NUM_EVENTS,
                        help=f'Number of clickstream events to generate (default: {NUM_EVENTS})')
     parser.add_argument('--seed',
                        type=int, default=None,

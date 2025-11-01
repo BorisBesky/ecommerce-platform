@@ -50,14 +50,6 @@ class UploaderConfig:
         self.skip_individual = skip_individual
         self.skip_merged = skip_merged
         self.upload_file_name = upload_file_name
-        self.endpoint = endpoint
-        self.access_key = access_key
-        self.secret_key = secret_key
-        self.bucket = bucket
-        self.data_dir = data_dir
-        self.include = include
-        self.prefix = prefix.rstrip('/')
-        self.skip_individual = skip_individual
 
 def setup_minio_client(cfg: UploaderConfig):
     """Create and configure MinIO client."""
