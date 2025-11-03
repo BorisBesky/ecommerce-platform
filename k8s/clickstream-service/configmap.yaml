@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickstream-service-config
+  namespace: ecommerce-platform
+data:
+  MINIO_ENDPOINT: "http://minio.ecommerce-platform.svc.cluster.local:9000"
+  MINIO_BUCKET: "analytics"
+  ICEBERG_NAMESPACE: "analytics"
+  ICEBERG_WAREHOUSE: "s3a://warehouse"
+  NESSIE_URI: "http://nessie.ecommerce-platform.svc.cluster.local:19120/api/v1"
+  NESSIE_BRANCH: "main"
+  DEFAULT_SIMULATION_BATCH_SIZE: "1000"
+  DEFAULT_SIMULATION_USERS: "150"
+  RAY_ADDRESS: "ray://ray-head.ecommerce-platform.svc.cluster.local:10001"
+  RAY_NAMESPACE: "clickstream"
+  RAY_JOB_SUBMISSION_URL: "http://ray-head.ecommerce-platform.svc.cluster.local:8265/api/jobs"
+  MINIO_SECURE: "false"
+

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickstream-backend
+  namespace: ecommerce-platform
+  labels:
+    app: clickstream
+    component: backend
+spec:
+  selector:
+    app: clickstream
+    component: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+  type: ClusterIP
+

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickstream-frontend
+  namespace: ecommerce-platform
+  labels:
+    app: clickstream
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: clickstream
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: clickstream
+        component: frontend
+    spec:
+      containers:
+        - name: clickstream-frontend
+          image: ghcr.io/your-org/clickstream-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: API_BASE_URL
+              value: "http://clickstream-backend.ecommerce-platform.svc.cluster.local:8000/api/v1"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+

@@ -5,6 +5,7 @@ namespace: ecommerce-platform
 
 resources:
   - ../../base
+  - ../../clickstream-service
 
 # Override images to use local registry
 images:
@@ -13,4 +14,10 @@ images:
     newTag: latest
   - name: localhost:5001/custom-spark
     newName: localhost:5001/custom-spark
+    newTag: latest
+  - name: ghcr.io/your-org/clickstream-backend
+    newName: localhost:5001/clickstream-backend
+    newTag: latest
+  - name: ghcr.io/your-org/clickstream-frontend
+    newName: localhost:5001/clickstream-frontend
     newTag: latest

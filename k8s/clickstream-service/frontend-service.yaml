@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickstream-frontend
+  namespace: ecommerce-platform
+  labels:
+    app: clickstream
+    component: frontend
+spec:
+  selector:
+    app: clickstream
+    component: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  type: ClusterIP
+

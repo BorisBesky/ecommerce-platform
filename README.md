@@ -12,6 +12,7 @@ The platform consists of the following components:
 - **Apache Flink**: Stream processing for real-time analytics
 - **Ray**: Distributed machine learning and AI workloads
 - **Apache Iceberg**: Open table format for analytics
+- **Clickstream Analytics Service**: FastAPI + React service for simulation orchestration, fraud analytics, and Ray job management
 
 ## Quick Start
 
@@ -141,6 +142,12 @@ kubectl port-forward svc/flink-jobmanager 8081:8081 -n ecommerce-platform
 - **Workers**: 2-3 replicas (auto-scaling), 2 CPU each, 6GB RAM each
 - **Use Cases**: Distributed ML training, hyperparameter tuning
 - **Applications**: Recommendation model training
+
+#### Clickstream Analytics Service
+- **Backend**: Python FastAPI (`services/clickstream/backend`)
+- **Frontend**: React + TypeScript dashboard (`services/clickstream/ui`)
+- **Use Cases**: Clickstream simulation, fraud metrics, recommendation accuracy insights, Ray orchestration
+- **Deployment**: See `k8s/clickstream-service/`
 
 ## Development Guide
 
