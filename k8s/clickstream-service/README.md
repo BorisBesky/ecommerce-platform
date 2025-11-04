@@ -12,12 +12,17 @@ Declarative manifests for deploying the clickstream analytics service (FastAPI b
 
 ## Usage
 
-1. Update the container image references in the deployments to point at your registry (see `backend-deployment.yaml` and `frontend-deployment.yaml`).
-2. Adjust secret values in `secret.yaml` for production environments.
-3. (Optional) Change the ingress host (`clickstream.local`) or add TLS configuration to match your cluster ingress controller.
-
-Apply manifests with Kustomize:
-
+1. Build the custom Docker images for the backend and frontend:
+   ```bash
+   make build-images
+   ```
+2. Push the custom Docker images to the local registry:
+   ```bash
+   make push-images-local
+   ```
+3. Update the container image references in the deployments to point at your registry (see `backend-deployment.yaml` and `frontend-deployment.yaml`).
+4. Adjust secret values in `secret.yaml` for production environments.
+5. (Optional) Change the ingress host (`clickstream.local`) or add TLS configuration to match your cluster ingress controller.  Apply manifests with Kustomize:
 ```bash
 kubectl apply -k k8s/clickstream-service
 ```

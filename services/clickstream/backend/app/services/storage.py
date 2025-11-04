@@ -11,8 +11,7 @@ from typing import Any, Iterable
 import boto3
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
-from pyiceberg.catalog import load_catalog
-from pyiceberg.catalog.catalog import Catalog
+from pyiceberg.catalog import load_catalog, Catalog
 from pyiceberg.exceptions import NoSuchNamespaceError
 
 from ..core.config import Settings

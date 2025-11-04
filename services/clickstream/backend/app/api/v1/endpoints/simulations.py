@@ -36,8 +36,8 @@ def get_default_parameters(settings: Settings = Depends(get_settings)) -> Simula
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def trigger_simulation(
-    params: SimulationParameters | None = Body(default=None),
     background_tasks: BackgroundTasks,
+    params: SimulationParameters | None = Body(default=None),
     simulator: ClickstreamSimulator = Depends(get_simulator),
     storage: StorageService = Depends(get_storage_service),
     settings: Settings = Depends(get_settings),

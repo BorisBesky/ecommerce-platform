@@ -18,24 +18,39 @@ build-images: ## Build custom Docker images for Spark and Flink with required JA
 	docker build -f custom-images/Dockerfile.spark -t custom-spark .
 	docker build -f custom-images/Dockerfile.flink -t custom-flink .
 
+build-clickstream-images: ## Build custom Docker images for Clickstream backend and frontend
+	docker build -t clickstream-backend services/clickstream/backend
+	docker build -t clickstream-frontend services/clickstream/ui
+
 push-images-cluster: ## Push custom Docker images to local registry
-	docker tag custom-spark registry.local/custom-spark:latest
-	docker push registry.local/custom-spark:latest
-	docker tag custom-flink registry.local/custom-flink:latest
-	docker push registry.local/custom-flink:latest
+#	docker tag custom-spark localhost:32000/custom-spark:latest
+#	docker push localhost:32000/custom-spark:latest
+#	docker tag custom-flink localhost:32000/custom-flink:latest
+#	docker push localhost:32000/custom-flink:latest
+	docker tag clickstream-backend localhost:32000/clickstream-backend:latest
+	docker push localhost:32000/clickstream-backend:latest
+	docker tag clickstream-frontend localhost:32000/clickstream-frontend:latest
+	docker push localhost:32000/clickstream-frontend:latest
 
 push-images-local: ## Push custom Docker images to local registry
 	docker tag custom-spark localhost:5000/custom-spark:latest
 	docker push localhost:5000/custom-spark:latest
 	docker tag custom-flink localhost:5000/custom-flink:latest
 	docker push localhost:5000/custom-flink:latest	
+	docker tag clickstream-backend localhost:5000/clickstream-backend:latest
+	docker push localhost:5000/clickstream-backend:latest
+	docker tag clickstream-frontend localhost:5000/clickstream-frontend:latest
+	docker push localhost:5000/clickstream-frontend:latest
 
 push-images-ghcr: ## Push custom Docker images to GitHub Container Registry
 	docker tag custom-spark ghcr.io/borisbesky/custom-spark:latest
 	docker push ghcr.io/borisbesky/custom-spark:latest
 	docker tag custom-flink ghcr.io/borisbesky/custom-flink:latest
 	docker push ghcr.io/borisbesky/custom-flink:latest
-
+	docker tag clickstream-backend ghcr.io/borisbesky/clickstream-backend:latest
+	docker push ghcr.io/borisbesky/clickstream-backend:latest
+	docker tag clickstream-frontend ghcr.io/borisbesky/clickstream-frontend:latest
+	docker push ghcr.io/borisbesky/clickstream-frontend:latest
 
 deploy-all: ## Deploy all components using Helm charts
 	k8s/deploy-all.sh $(K8S_NAMESPACE) $(CLICKSTREAM_BUCKET)

@@ -147,7 +147,7 @@ kubectl port-forward svc/flink-jobmanager 8081:8081 -n ecommerce-platform
 - **Backend**: Python FastAPI (`services/clickstream/backend`)
 - **Frontend**: React + TypeScript dashboard (`services/clickstream/ui`)
 - **Use Cases**: Clickstream simulation, fraud metrics, recommendation accuracy insights, Ray orchestration
-- **Deployment**: See `k8s/clickstream-service/`
+- **Deployment**: See `k8s/clickstream-service/README.md`
 
 ## Development Guide
 
@@ -155,22 +155,27 @@ kubectl port-forward svc/flink-jobmanager 8081:8081 -n ecommerce-platform
 
 ```
 ecommerce-platform/
-├── k8s/                          # Kubernetes manifests and scripts
-│   ├── *.yaml                    # Service deployments
+├── custom-images/               # Custom docker images for spark and flink
+├── data/                        # Sample data files
+├── docs/                        # Documentation
+├── k8s/                         # Kubernetes manifests and scripts
+│   ├── *.yaml                   # Service deployments
+│   ├── overlays/                # Kustomize overlays for different environments
+│   │   ├── local/               # Local development overlay
+│   │   ├── ghcr/                # GitHub Container Registry overlay
+│   │   ├── cluster/             # Cluster deployment overlay
+│   ├── base/                    # Base manifests for all services
+│   ├── clickstream-service/     # Clickstream service manifests
+│   ├── flink-apps/              # Flink applications
+│   ├── ray-apps/                # Ray applications
+│   ├── spark-apps/              # Spark applications
 │   ├── check-prerequisites.sh   # Prerequisites validation
 │   ├── deploy-all.sh            # Main deployment script
 │   ├── validate-deployment.sh   # Validation tests
 │   ├── submit-sample-jobs.sh    # Sample workload submission
 │   ├── cleanup-deployment.sh    # Cleanup script
-│   ├── spark-apps/              # Kubernetes-optimized Spark apps
-│   ├── flink-apps/              # Kubernetes-optimized Flink apps
-│   └── ray-apps/                # Kubernetes-optimized Ray apps
-├── spark-apps/                  # Legacy Spark applications (reference)
-├── flink-apps/                  # Legacy Flink applications (reference)
-├── ray-apps/                    # Legacy Ray applications (reference)
-├── legacy/                      # Old Docker Compose deployment files
-├── data/                        # Sample data files
-├── tools/                       # Utility scripts
+│   ├── tools/                   # Utility scripts
+│   └── Makefile                 # Makefile for building and deploying the platform
 └── README.md                    # This file
 ```
 
