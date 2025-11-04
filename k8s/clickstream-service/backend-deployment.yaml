@@ -7,7 +7,7 @@ metadata:
     app: clickstream
     component: backend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: clickstream
@@ -44,9 +44,9 @@ spec:
             periodSeconds: 20
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: "100m"
+              memory: "256Mi"
             limits:
-              cpu: "1"
-              memory: "1Gi"
+              cpu: "500m"
+              memory: "768Mi"
 

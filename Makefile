@@ -23,10 +23,10 @@ build-clickstream-images: ## Build custom Docker images for Clickstream backend 
 	docker build -t clickstream-frontend services/clickstream/ui
 
 push-images-cluster: ## Push custom Docker images to local registry
-#	docker tag custom-spark localhost:32000/custom-spark:latest
-#	docker push localhost:32000/custom-spark:latest
-#	docker tag custom-flink localhost:32000/custom-flink:latest
-#	docker push localhost:32000/custom-flink:latest
+	docker tag custom-spark localhost:32000/custom-spark:latest
+	docker push localhost:32000/custom-spark:latest
+	docker tag custom-flink localhost:32000/custom-flink:latest
+	docker push localhost:32000/custom-flink:latest
 	docker tag clickstream-backend localhost:32000/clickstream-backend:latest
 	docker push localhost:32000/clickstream-backend:latest
 	docker tag clickstream-frontend localhost:32000/clickstream-frontend:latest

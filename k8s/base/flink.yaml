@@ -159,7 +159,7 @@ metadata:
   name: flink-taskmanager
   namespace: ecommerce-platform
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: flink
@@ -224,10 +224,10 @@ spec:
         resources:
           requests:
             cpu: 1000m
-            memory: 2Gi
+            memory: 1Gi
           limits:
             cpu: 2000m
-            memory: 3Gi
+            memory: 2Gi
         livenessProbe:
           tcpSocket:
             port: 6122

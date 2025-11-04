@@ -166,7 +166,7 @@ metadata:
   name: spark-worker
   namespace: ecommerce-platform
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: spark
