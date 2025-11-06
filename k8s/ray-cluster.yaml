@@ -1,0 +1,155 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: ray-cluster
+  namespace: ecommerce-platform
+  labels:
+    app: ray
+    ray-cluster-type: persistent
+spec:
+  rayVersion: '2.46.0'
+  enableInTreeAutoscaling: true
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+      num-cpus: '0'  # Don't schedule tasks on head node
+    template:
+      metadata:
+        labels:
+          app: ray
+          component: head
+          ray-cluster: persistent
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          - containerPort: 8000
+            name: serve
+          volumeMounts:
+          - name: ray-scripts
+            mountPath: /apps
+            readOnly: true
+          - name: serve-script
+            mountPath: /home/ray/serve_recommendations.py
+            subPath: serve_recommendations.py
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+          env:
+          - name: RAY_GRAFANA_HOST
+            value: "http://grafana:3000"
+          - name: RAY_PROMETHEUS_HOST
+            value: "http://prometheus:9090"
+          - name: MINIO_ENDPOINT
+            value: "http://minio.ecommerce-platform.svc.cluster.local:9000"
+          - name: MINIO_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: clickstream-service-secrets
+                key: MINIO_ACCESS_KEY
+          - name: MINIO_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: clickstream-service-secrets
+                key: MINIO_SECRET_KEY
+        volumes:
+        - name: ray-scripts
+          configMap:
+            name: ray-training-script
+            defaultMode: 0755
+        - name: serve-script
+          configMap:
+            name: ray-serve-script
+  workerGroupSpecs:
+  - replicas: 2
+    minReplicas: 1
+    maxReplicas: 5
+    groupName: worker-group
+    rayStartParams:
+      num-cpus: '2'
+    template:
+      metadata:
+        labels:
+          app: ray
+          component: worker
+          ray-cluster: persistent
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.46.0
+          volumeMounts:
+          - name: ray-scripts
+            mountPath: /apps
+            readOnly: true
+          - name: serve-script
+            mountPath: /home/ray/serve_recommendations.py
+            subPath: serve_recommendations.py
+          env:
+          - name: MINIO_ENDPOINT
+            value: "http://minio.ecommerce-platform.svc.cluster.local:9000"
+          - name: MINIO_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: clickstream-service-secrets
+                key: MINIO_ACCESS_KEY
+          - name: MINIO_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: clickstream-service-secrets
+                key: MINIO_SECRET_KEY
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+        volumes:
+        - name: ray-scripts
+          configMap:
+            name: ray-training-script
+            defaultMode: 0755
+        - name: serve-script
+          configMap:
+            name: ray-serve-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-head
+  namespace: ecommerce-platform
+  labels:
+    app: ray
+    component: head
+spec:
+  type: ClusterIP
+  selector:
+    app: ray
+    component: head
+    ray-cluster: persistent
+  ports:
+  - name: gcs-server
+    port: 6379
+    targetPort: 6379
+  - name: dashboard
+    port: 8265
+    targetPort: 8265
+  - name: client
+    port: 10001
+    targetPort: 10001
+  - name: serve
+    port: 8000
+    targetPort: 8000
+

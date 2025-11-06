@@ -1,3 +1,23 @@
+# ⚠️ DEPRECATED: This file creates a temporary Ray cluster for each job.
+# 
+# Use the persistent Ray cluster instead:
+#   kubectl apply -f k8s/ray-cluster.yaml
+#
+# Then submit jobs via:
+#   1. Clickstream API: POST /api/v1/ray/jobs
+#   2. Ray CLI: ray job submit --address http://ray-head:8265 -- python script.py
+#   3. Dashboard: http://localhost:8265 (after port-forward)
+#
+# Benefits of using persistent cluster:
+#   ✅ No startup delay (cluster always running)
+#   ✅ Better resource utilization
+#   ✅ Unified cluster for jobs + serving
+#   ✅ Auto-scaling workers (1-5)
+#
+# See: k8s/UNIFIED_RAY_CLUSTER.md
+#
+# This file is kept for reference only and should NOT be deployed.
+# ---
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:

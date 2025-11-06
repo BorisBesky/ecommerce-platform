@@ -22,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 DEFAULT_ENTRYPOINTS: dict[RayJobType, str] = {
-    RayJobType.FULL_REFRESH: "python /apps/train_prio_aware_recommendation_model.py",
+    RayJobType.FULL_REFRESH: "python /apps/train_recommendation_model_k8s.py",
     RayJobType.INCREMENTAL_REFRESH: "python /apps/train_prio_aware_recommendation_model.py",
     RayJobType.BATCH_INFERENCE: "python /apps/serve_recommendations.py --mode batch",
 }
@@ -134,7 +134,7 @@ class RayJobManager:
                 "MINIO_ACCESS_KEY": self.settings.minio_access_key,
                 "MINIO_SECRET_KEY": self.settings.minio_secret_key,
                 "CLICKSTREAM_S3_BUCKET": self.settings.minio_bucket,
-                "CLICKSTREAM_S3_KEY": "data/clickstream/latest.jsonl",
+                "CLICKSTREAM_S3_KEY": "data/clickstream/clickstream.jsonl",
                 "MODEL_OUTPUT_KEY": "models/prio_aware_recommendation_model.pkl",
             },
             "pip": [

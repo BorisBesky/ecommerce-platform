@@ -143,7 +143,7 @@ fi
 # Step 8: Deploy Ray Cluster (for training jobs)
 echo ""
 echo "🧠 Step 8: Deploying Ray cluster..."
-kubectl apply -f "${K8S_DIR}/ray.yaml"
+kubectl apply -f "${K8S_DIR}/ray-cluster.yaml"
 
 # Give some time for Ray cluster to initialize
 echo "   ⏳ Waiting for Ray cluster to initialize..."
@@ -161,10 +161,12 @@ echo "   MinIO API: kubectl port-forward svc/minio 9000:9000 -n $NAMESPACE"
 echo "   Nessie API: kubectl port-forward svc/nessie 19120:19120 -n $NAMESPACE"
 echo "   Spark Master UI: kubectl port-forward svc/spark-master 8080:8080 -n $NAMESPACE"
 echo "   Flink JobManager UI: kubectl port-forward svc/flink-jobmanager 8081:8081 -n $NAMESPACE"
-echo ""
-echo "📝 Next Steps:"
-echo "   1. Run validation tests: ./validate-deployment.sh"
-echo "   2. Submit sample jobs: ./submit-sample-jobs.sh"
-echo "   3. Monitor cluster health: kubectl get all -n $NAMESPACE"
-echo ""
+echo "   Ray Dashboard: kubectl port-forward svc/ray-head 8265:8265 -n $NAMESPACE"
+echo "   Ray Serve: kubectl port-forward svc/recommendation-service-serve-svc -n $NAMESPACE 8083:8000"
+echo "   if you have set up the ingress @k8s/clickstream-service/ingress.yaml
+echo "   \t\tRay Dashboard at http://ray.clickstream.local"
+echo "   \t\tMinIO Console at http://minio-console.clickstream.local"
+echo "   \t\tFlink JobManager UI at http://flink.clickstream.local"
+echo "   \t\tClickstream Backend at http://clickstream.local/api"
+echo "   \t\tClickstream Frontend at http://clickstream.local"
 echo "🗑️  To clean up: ./cleanup-deployment.sh"

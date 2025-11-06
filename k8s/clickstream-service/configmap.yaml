@@ -14,6 +14,6 @@ data:
   DEFAULT_SIMULATION_USERS: "150"
   RAY_ADDRESS: "ray://ray-head.ecommerce-platform.svc.cluster.local:10001"
   RAY_NAMESPACE: "clickstream"
-  RAY_JOB_SUBMISSION_URL: "http://ray-head.ecommerce-platform.svc.cluster.local:8265/api/jobs"
+  RAY_JOB_SUBMISSION_URL: "http://ray-head.ecommerce-platform.svc.cluster.local:8265/api"
   MINIO_SECURE: "false"
 

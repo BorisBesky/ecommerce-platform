@@ -18,7 +18,7 @@ MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
 S3_BUCKET = os.environ.get("CLICKSTREAM_S3_BUCKET", "warehouse")
 OUTPUT_MODEL_KEY = os.environ.get("MODEL_OUTPUT_KEY", "models/prio_aware_recommendation_model.pkl")
 CLICKSTREAM_S3_KEY = os.environ.get("CLICKSTREAM_S3_KEY", "data/clickstream.json")
-NEW_CLICKSTREAM_S3_KEY = os.environ.get("NEW_CLICKSTREAM_S3_KEY", "data/clickstream_new.json")
+NEW_CLICKSTREAM_S3_KEY = os.environ.get("NEW_CLICKSTREAM_S3_KEY", "data/latest.jsonl")
 INCREMENTAL_MODE = os.environ.get("INCREMENTAL_MODE", "false").lower() == "true"
 
 # Sequence model hyperparameters

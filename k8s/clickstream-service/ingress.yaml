@@ -42,7 +42,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: rayjob-recommendations-training-head-svc
+                name: ray-head
                 port:
                   number: 8265
     - host: minio.clickstream.local
