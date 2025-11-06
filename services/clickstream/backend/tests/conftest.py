@@ -27,7 +27,7 @@ def test_settings() -> Settings:
         MINIO_ACCESS_KEY="test-access-key",
         MINIO_SECRET_KEY="test-secret-key",
         minio_endpoint="http://test-minio:9000",
-        minio_bucket="test-bucket",
+        minio_bucket="warehouse",
         nessie_uri="http://test-nessie:19120/api/v1",
         ray_address="ray://test-ray:10001",
         ray_job_submission_url="http://test-ray:8265/api/jobs",

@@ -5,7 +5,7 @@ metadata:
   namespace: ecommerce-platform
 data:
   MINIO_ENDPOINT: "http://minio.ecommerce-platform.svc.cluster.local:9000"
-  MINIO_BUCKET: "analytics"
+  MINIO_BUCKET: "warehouse"
   ICEBERG_NAMESPACE: "analytics"
   ICEBERG_WAREHOUSE: "s3a://warehouse"
   NESSIE_URI: "http://nessie.ecommerce-platform.svc.cluster.local:19120/api/v1"

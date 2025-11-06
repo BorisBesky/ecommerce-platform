@@ -163,7 +163,7 @@ class TestDataGenerationManual:
         4. Verifies new files were created in MinIO
         5. Checks file sizes are reasonable
         """
-        bucket_name = os.getenv("MINIO_BUCKET", "analytics")
+        bucket_name = os.getenv("MINIO_BUCKET", "warehouse")
         
         # Get initial list of objects
         print(f"\n📦 Checking MinIO bucket: {bucket_name}")

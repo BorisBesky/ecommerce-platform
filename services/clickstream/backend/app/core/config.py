@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = Field(..., alias="MINIO_SECRET_KEY")
     minio_region: str | None = Field(None, alias="MINIO_REGION")
     minio_secure: bool = Field(False, alias="MINIO_SECURE")
-    minio_bucket: str = Field("analytics", alias="MINIO_BUCKET")
+    minio_bucket: str = Field("warehouse", alias="MINIO_BUCKET")
 
     # Iceberg configuration
     iceberg_namespace: str = Field("analytics", alias="ICEBERG_NAMESPACE")
