@@ -1,11 +1,11 @@
 """Endpoint modules for API v1."""
 
-from . import health, simulations, analytics, ray_jobs
+from . import health, analytics, ray_jobs, data
 
 __all__ = [
     "health",
-    "simulations",
     "analytics",
     "ray_jobs",
+    "data",
 ]
 

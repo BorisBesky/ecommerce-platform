@@ -21,7 +21,7 @@ spec:
       containers:
         - name: clickstream-frontend
           image: ghcr.io/your-org/clickstream-frontend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
               name: http

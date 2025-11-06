@@ -6,7 +6,7 @@ CLICKSTREAM_BUCKET ?= warehouse
 CLICKSTREAM_KEY ?= data/clickstream.json
 SEED ?= 42
 
-.PHONY: help build-images push-images-local push-images-ghcr deploy-all data-generate upload-data upload-clickstream spark-etl flink-run ray-train ray-portforward minio-portforward spark-portforward flink-portforward all-portforward ray-serve-portforward ray-get-recommendations
+.PHONY: help build-images push-images-local push-images-ghcr deploy-all data-generate upload-data upload-clickstream spark-etl flink-run ray-train ray-portforward minio-portforward spark-portforward flink-portforward all-portforward ray-serve-portforward ray-get-recommendations validate-clickstream test-clickstream test-clickstream-unit test-clickstream-data test-clickstream-data-e2e test-clickstream-data-manual
 
 help: ## Show available targets
 	@awk -F':.*?##' '/^[a-zA-Z_-]+:.*?##/ {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -19,7 +19,7 @@ build-images: ## Build custom Docker images for Spark and Flink with required JA
 	docker build -f custom-images/Dockerfile.flink -t custom-flink .
 
 build-clickstream-images: ## Build custom Docker images for Clickstream backend and frontend
-	docker build -t clickstream-backend services/clickstream/backend
+	docker build -t clickstream-backend -f services/clickstream/backend/Dockerfile .
 	docker build -t clickstream-frontend services/clickstream/ui
 
 push-images-cluster: ## Push custom Docker images to local registry
@@ -53,7 +53,7 @@ push-images-ghcr: ## Push custom Docker images to GitHub Container Registry
 	docker push ghcr.io/borisbesky/clickstream-frontend:latest
 
 deploy-all: ## Deploy all components using Helm charts
-	k8s/deploy-all.sh $(K8S_NAMESPACE) $(CLICKSTREAM_BUCKET)
+	k8s/deploy-all.sh clustervalidate 
 
 data-generate: ## Generate users, products, and clickstream (stable alias created)
 	$(PYTHON) tools/generate_data.py all --seed $(SEED) --output-dir $(DATA_OUT_DIR)
@@ -63,25 +63,25 @@ MINIO_ACCESS_KEY ?= minioadmin
 MINIO_SECRET_KEY ?= minioadmin
 NESSIE_ENDPOINT ?= http://localhost:19120/api/v1
 
-upload-data: ## Upload generated users, products, clickstream using Python uploader
-	$(PYTHON) tools/upload-data-to-minio.py \
-	  --endpoint $(MINIO_ENDPOINT) \
-	  --access-key $(MINIO_ACCESS_KEY) \
-	  --secret-key $(MINIO_SECRET_KEY) \
-	  --bucket $(CLICKSTREAM_BUCKET) \
-	  --data-dir $(DATA_OUT_DIR) \
-	  --prefix data \
-	  --include users products clickstream
+upload-data: data-generate ## Upload generated users, products, clickstream using Python uploader
+	$(PYTHON) tools/generate_data.py all \
+	  --upload \
+	  --seed $(SEED) \
+	  --output-dir $(DATA_OUT_DIR) \
+	  --minio-endpoint $(MINIO_ENDPOINT) \
+	  --minio-access-key $(MINIO_ACCESS_KEY) \
+	  --minio-secret-key $(MINIO_SECRET_KEY) \
+	  --minio-bucket $(CLICKSTREAM_BUCKET)
 
 upload-clickstream: ## Upload generated users, products, clickstream using Python uploader
-	$(PYTHON) tools/upload-data-to-minio.py \
-	  --endpoint $(MINIO_ENDPOINT) \
-	  --access-key $(MINIO_ACCESS_KEY) \
-	  --secret-key $(MINIO_SECRET_KEY) \
-	  --bucket $(CLICKSTREAM_BUCKET) \
-	  --data-dir $(DATA_OUT_DIR) \
-	  --prefix data \
-	  --include clickstream
+	$(PYTHON) tools/generate_data.py clickstream \
+	  --upload \
+	  --seed $(SEED) \
+	  --output-dir $(DATA_OUT_DIR) \
+	  --minio-endpoint $(MINIO_ENDPOINT) \
+	  --minio-access-key $(MINIO_ACCESS_KEY) \
+	  --minio-secret-key $(MINIO_SECRET_KEY) \
+	  --minio-bucket $(CLICKSTREAM_BUCKET)
 
 spark-etl: ## Run only Spark ETL part (requires data uploaded)
 	SPARK_MASTER_POD=$$(kubectl get pods -l app=spark,component=master -n $(K8S_NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
@@ -156,3 +156,36 @@ ray-serve-portforward: ## Port-forward Ray Serve UI (8000)
 
 ray-get-recommendations: ## Get recommendations from Ray Serve
 	kubectl exec -n $(K8S_NAMESPACE) $(kubectl get pods -n $(K8S_NAMESPACE) -l app=ray,component=serve-head -o jsonpath='{.items[0].metadata.name}') -- bash -lc "curl -X POST http://localhost:8000/recommend -H 'Content-Type: application/json' -d '{\"user_id\": \"1\", \"n\": 5, \"exclude_products\": [\"prod1\", \"prod2\"]}'"
+
+validate-clickstream: ## Validate clickstream service deployment and run e2e tests
+	k8s/validate-clickstream.sh
+
+test-clickstream-unit: ## Run clickstream unit tests
+	cd services/clickstream/backend && $(PYTHON) -m pytest tests/test_health.py tests/test_api.py -v
+
+test-clickstream: ## Run all clickstream tests (unit + e2e)
+	cd services/clickstream/backend && \
+	$(PYTHON) -m pytest tests/test_health.py tests/test_api.py tests/test_data_generation.py -v && \
+	RUN_E2E_TESTS=true tests/run_e2e_tests.sh
+
+test-clickstream-data: ## Run data generation unit tests (safe, mocked)
+	cd services/clickstream/backend && $(PYTHON) -m pytest tests/test_data_generation.py -v
+
+test-clickstream-data-e2e: ## Run data generation e2e tests (validates endpoint, doesn't trigger)
+	cd services/clickstream/backend && \
+	RUN_E2E_TESTS=true $(PYTHON) -m pytest tests/test_e2e.py::TestDataEndpoints -v
+
+test-clickstream-data-manual: ## Run manual data generation tests (SLOW - actually generates data)
+	@echo "⚠️  WARNING: This will actually generate and upload data to MinIO!"
+	@echo "This test takes several minutes and should only be run in test/dev environments."
+	@printf "Continue? [y/N] "; \
+	read REPLY; \
+	case "$$REPLY" in \
+		[Yy]*) \
+			cd services/clickstream/backend && \
+			RUN_E2E_TESTS=true RUN_MANUAL_TESTS=true $(PYTHON) -m pytest tests/test_data_generation_manual.py -v; \
+			;; \
+		*) \
+			echo "Cancelled."; \
+			;; \
+	esac

@@ -3,15 +3,11 @@
 from fastapi import Depends
 
 from ..core.config import Settings, get_settings
-from ..services import AnalyticsService, ClickstreamSimulator, RayJobManager, StorageService
+from ..services import AnalyticsService, RayJobManager, StorageService
 
 
 def get_storage_service(settings: Settings = Depends(get_settings)) -> StorageService:
     return StorageService(settings=settings)
-
-
-def get_simulator(settings: Settings = Depends(get_settings)) -> ClickstreamSimulator:
-    return ClickstreamSimulator(settings=settings)
 
 
 def get_analytics_service(

@@ -35,3 +35,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 app = create_app()
 
+for route in app.routes:
+    if hasattr(route, "path"):
+        print(f"Registered route: {route.path}")
+    elif hasattr(route, "routes"):
+        for sub_route in route.routes:
+            print(f"Registered route: {sub_route.path}")
+

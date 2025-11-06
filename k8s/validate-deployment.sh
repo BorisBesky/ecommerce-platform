@@ -227,6 +227,15 @@ main() {
     check_pod_health "app=flink,component=taskmanager" "Flink TaskManagers" || ((failed_checks++))
     
     echo ""
+    echo "📊 Checking Clickstream Service..."
+    check_deployment "clickstream-backend" 1 || ((failed_checks++))
+    check_deployment "clickstream-frontend" 1 || ((failed_checks++))
+    check_service "clickstream-backend" || ((failed_checks++))
+    check_service "clickstream-frontend" || ((failed_checks++))
+    check_pod_health "app=clickstream,component=backend" "Clickstream Backend" || ((failed_checks++))
+    check_pod_health "app=clickstream,component=frontend" "Clickstream Frontend" || ((failed_checks++))
+    
+    echo ""
     echo "🧠 Checking Ray Services..."
     if kubectl get crd rayjobs.ray.io &> /dev/null; then
         print_status "PASS" "KubeRay operator is installed"
@@ -326,6 +335,8 @@ main() {
     test_service_connectivity "nessie" "19120" "/api/v1/config" || ((failed_checks++))
     test_service_connectivity "spark-master" "8080" "/" || ((failed_checks++))
     test_service_connectivity "flink-jobmanager" "8081" "/" || ((failed_checks++))
+    test_service_connectivity "clickstream-backend" "8000" "/api/v1/health/live" || ((failed_checks++))
+    test_service_connectivity "clickstream-frontend" "80" "/" || ((failed_checks++))
     
     echo ""
     echo "📋 Summary:"
@@ -341,6 +352,8 @@ main() {
         echo "   - Access MinIO Console: kubectl port-forward svc/minio 9001:9001 -n $NAMESPACE"
         echo "   - Access Spark UI: kubectl port-forward svc/spark-master 8080:8080 -n $NAMESPACE"
         echo "   - Access Flink UI: kubectl port-forward svc/flink-jobmanager 8081:8081 -n $NAMESPACE"
+        echo "   - Access Clickstream UI: kubectl port-forward svc/clickstream-frontend 8001:80 -n $NAMESPACE"
+        echo "   - Access Clickstream API: kubectl port-forward svc/clickstream-backend 8000:8000 -n $NAMESPACE"
         echo "   - Submit jobs: ./submit-sample-jobs.sh"
         exit 0
     else
