@@ -28,16 +28,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function triggerSimulation(params: SimulationParameters): Promise<SimulationTriggerResponse> {
-  return request<SimulationTriggerResponse>('/simulations', {
+/**
+ * Trigger data generation using the new unified endpoint.
+ * Note: This endpoint doesn't accept parameters and generates a default dataset.
+ * Returns a Response object for streaming output.
+ */
+export async function triggerDataGeneration(): Promise<Response> {
+  const response = await fetch(`${API_BASE_URL}/data/generate`, {
     method: 'POST',
-    body: JSON.stringify(params),
+    headers: {
+      'Content-Type': 'application/json',
+    },
   });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Data generation failed with status ${response.status}`);
+  }
+
+  return response; // Return the Response object for streaming
 }
 
-export function getSimulationStatus(runId: string): Promise<SimulationStatusResponse> {
-  return request<SimulationStatusResponse>(`/simulations/${encodeURIComponent(runId)}`);
-}
 
 export function fetchFraudSummary(): Promise<FraudSummaryResponse> {
   return request<FraudSummaryResponse>('/analytics/fraud');
