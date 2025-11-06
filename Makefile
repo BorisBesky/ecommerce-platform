@@ -139,6 +139,11 @@ spark-portforward: ## Port-forward Spark master UI (8080) & worker UI (8081)
 flink-portforward: ## Port-forward Flink JobManager UI (8081)
 	kubectl port-forward svc/flink-jobmanager -n $(K8S_NAMESPACE) 8082:8081
 
+clickstream-portforward: ## Port-forward Clickstream backend (8000) & frontend (80)
+	kubectl port-forward svc/clickstream-backend -n $(K8S_NAMESPACE) 8000:8000 &
+	kubectl port-forward svc/clickstream-frontend -n $(K8S_NAMESPACE) 8001:80 &
+	wait
+
 all-portforward: ## Port-forward all UIs: MinIO (9000,9001), Spark (8080,8081), Flink (8082)
 	$(MAKE) minio-portforward & \
 	$(MAKE) spark-portforward & \

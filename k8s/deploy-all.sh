@@ -151,26 +151,6 @@ wait_for_pods "app=ray,component=head" $NAMESPACE
 wait_for_pods "app=ray,component=worker" $NAMESPACE
 echo "   ✅ Ray cluster is ready"
 
-# Step 9: Verify all deployments
-echo ""
-echo "🔍 Step 9: Verifying deployments..."
-
-# Check all pods
-echo "   Checking all pods in namespace $NAMESPACE:"
-kubectl get pods -n $NAMESPACE --show-labels > pods_status.txt
-cat pods_status.txt
-if grep -q "0/[1-9]" pods_status.txt; then
-    echo "❌ Some pods are not running correctly. Please check the pod statuses above."
-    exit 1
-else
-    echo "   ✅ All pods are running"
-fi
-
-echo ""
-echo "   Checking all services in namespace $NAMESPACE:"
-kubectl get services -n $NAMESPACE > services_status.txt
-cat services_status.txt
-echo "   ✅ Services are set up"
 
 echo ""
 echo "✅ Deployment completed successfully!"

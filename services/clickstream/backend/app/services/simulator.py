@@ -71,7 +71,6 @@ class ClickstreamSimulator:
         storage.update_run_status(run, status="running")
 
         try:
-            storage.ensure_namespace()
             existing_users: Optional[bytes] = None
             existing_products: Optional[bytes] = None
             if params.mode == SimulationMode.INCREMENTAL:
@@ -130,6 +129,24 @@ class ClickstreamSimulator:
                 artifact_paths[f"events_batch_{batch.index:04d}"] = key
                 combined_records.extend(batch.records)
                 total_events += batch.size
+
+                # Also persist each batch into the canonical dataset location that
+                # the Flink streaming job consumes: data/clickstream/individual/
+                # This enables the existing Flink deployment to pick up streaming inputs.
+                try:
+                    storage.store_canonical_dataset(
+                        f"clickstream/individual/clickstream-batch-{batch.index:04d}.jsonl",
+                        ("\n".join(batch.records)).encode("utf-8"),
+                        content_type="application/json",
+                    )
+                except Exception as exc:
+                    # Do not fail the whole run if a single canonical copy fails;
+                    # the per-run artifacts above are still available for debugging.
+                    LOGGER.warning(
+                        "Failed to persist canonical individual batch %s: %s",
+                        batch.index,
+                        exc,
+                    )
 
             if combined_records:
                 combined_payload = "\n".join(combined_records).encode("utf-8")

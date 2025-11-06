@@ -6,6 +6,7 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
 spec:
+  ingressClassName: nginx
   rules:
     - host: clickstream.local
       http:
@@ -24,4 +25,44 @@ spec:
                 name: clickstream-frontend
                 port:
                   number: 80
+    - host: flink.clickstream.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: flink-jobmanager
+                port:
+                  number: 8081
+    - host: ray.clickstream.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rayjob-recommendations-training-head-svc
+                port:
+                  number: 8265
+    - host: minio.clickstream.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9000
+    - host: minio-console.clickstream.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9001
 
